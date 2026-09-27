@@ -2,12 +2,12 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 export async function generateTrailPlan(profile) {
   if (!GEMINI_API_KEY) {
-    throw new Error("Clé API Gemini manquante. Configure VITE_GEMINI_API_KEY dans Vercel.");
+    throw new Error("Clé API Gemini manquante dans Vercel (VITE_GEMINI_API_KEY).");
   }
 
   const prompt = `
 Tu es un entraîneur expert en trail et ultra-trail.
-Génère un plan d'entraînement sur-mesure au format JSON strict, sans balises markdown autour (pas de \`\`\`json).
+Génère un plan d'entraînement sur-mesure au format JSON strict, sans texte autour et sans balises markdown (pas de \`\`\`json).
 
 Profil du coureur :
 - Nom : ${profile.name}
@@ -39,8 +39,9 @@ Génère la première semaine de préparation avec la structure JSON exacte suiv
 }
 `;
 
+  // Utilisation de gemini-2.5-flash
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -52,7 +53,8 @@ Génère la première semaine de préparation avec la structure JSON exacte suiv
   );
 
   if (!response.ok) {
-    throw new Error(`Erreur API Gemini (${response.status})`);
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(`Erreur API Gemini (${response.status}) : ${errorData.error?.message || 'URL ou clé invalide'}`);
   }
 
   const data = await response.json();
