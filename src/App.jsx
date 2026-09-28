@@ -11,9 +11,14 @@ import {
   Heart, 
   RefreshCw,
   Calendar,
-  Radio,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Flame,
+  Award,
+  BarChart3,
+  Sliders,
+  ChevronDown,
+  User
 } from 'lucide-react';
 import { generateTrailPlan } from './services/gemini';
 
@@ -24,7 +29,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Profil de l'utilisateur
+  // Profil coureur
   const [profile, setProfile] = useState(() => {
     const savedProfile = localStorage.getItem('trailfit_profile');
     if (savedProfile) {
@@ -42,7 +47,7 @@ export default function App() {
     };
   });
 
-  // Plan de la semaine (avec lecture dans localStorage)
+  // Plan hebdomadaire
   const [currentWeek, setCurrentWeek] = useState(() => {
     const savedPlan = localStorage.getItem('trailfit_current_week');
     if (savedPlan) {
@@ -52,26 +57,47 @@ export default function App() {
       number: 1,
       totalWeeks: 8,
       phase: 'Foncier & Reprise',
-      focus: 'Base d\'endurance et dénivelé progressif',
-      targetKm: 40,
+      focus: 'Développement de l\'endurance fondamentale et renforcement musculaire',
+      targetKm: 42,
       targetDPlus: 1200,
       sessions: [
         {
           id: 1,
           day: 'Mardi',
-          type: 'Relâchement',
-          title: 'Footing EF',
+          type: 'Endurance',
+          title: 'Footing de reprise & PPG',
           duration: '50 min',
-          distance: '8 km',
-          elevation: '100m D+',
-          desc: 'Aisance respiratoire totale.',
+          distance: '9 km',
+          elevation: '120m D+',
+          desc: 'Aisance respiratoire totale. Finir par 15 min de renforcement gainage.',
+          completed: false
+        },
+        {
+          id: 2,
+          day: 'Jeudi',
+          type: 'Qualité',
+          title: 'Côtes courtes & VMA montée',
+          duration: '1h05',
+          distance: '11 km',
+          elevation: '350m D+',
+          desc: '10x 45" en côte raide (effort 90% VMA). Récupération en descente au pas.',
+          completed: false
+        },
+        {
+          id: 3,
+          day: 'Samedi',
+          type: 'Sortie Longue',
+          title: 'Rando-Course en bloc D+',
+          duration: '2h15',
+          distance: '18 km',
+          elevation: '650m D+',
+          desc: 'Travail spécifique de marche en montée avec bâtons et relance sur le plat.',
           completed: false
         }
       ]
     };
   });
 
-  // Sauvegarde automatique du profil et du plan
   useEffect(() => {
     localStorage.setItem('trailfit_profile', JSON.stringify(profile));
   }, [profile]);
@@ -80,7 +106,6 @@ export default function App() {
     localStorage.setItem('trailfit_current_week', JSON.stringify(currentWeek));
   }, [currentWeek]);
 
-  // Génération ou chargement d'une semaine spécifique
   const loadWeek = async (weekNum) => {
     setIsLoading(true);
     setErrorMsg('');
@@ -113,278 +138,374 @@ export default function App() {
     let updatedSessions = [...currentWeek.sessions];
 
     if (status === 'fatigued') {
-      feedback = "IA Coach : Charge réajustée. La sortie longue est réduite (-30% D+) pour favoriser la récupération.";
+      feedback = "Charge adaptée : Sortie longue réduite de 35% pour vous préserver.";
       updatedSessions = updatedSessions.map(s => {
-        if (s.type.toLowerCase().includes('longue') || s.type.toLowerCase().includes('spécifique') || s.type.toLowerCase().includes('qualité')) {
-          return { ...s, duration: '1h15', elevation: '150m D+', desc: 'Séance raccourcie pour éviter le surentraînement.' };
+        if (s.type.toLowerCase().includes('longue') || s.type.toLowerCase().includes('qualité')) {
+          return { ...s, duration: '1h15', elevation: '200m D+', desc: 'Séance raccourcie suite à ton signal de fatigue.' };
         }
         return s;
       });
     } else if (status === 'injured') {
-      feedback = "IA Coach : Alerte gêne/douleur. Les séances à impact au sol sont remplacées par du Cross-Training.";
+      feedback = "Alerte blessure : Remplacement immédiat des impacts par du Cross-Training.";
       updatedSessions = updatedSessions.map(s => {
-        if (!s.completed) return { ...s, type: 'Cross-Training', title: 'Vélo / Home-Trainer', elevation: '0m D+', desc: 'Effort fluide sans impact au sol.' };
+        if (!s.completed) return { ...s, type: 'Cross-Training', title: 'Vélo / Home-Trainer', elevation: '0m D+', desc: 'Maintien du travail cardio sans choc sur les articulations.' };
         return s;
       });
     } else {
-      feedback = "IA Coach : Forme optimale confirmée. Le programme reste inchangé.";
+      feedback = "Forme confirmée : Programme maintenu à 100%.";
     }
 
     setAiFeedback(feedback);
     setCurrentWeek(prev => ({ ...prev, sessions: updatedSessions }));
   };
 
+  const completedCount = currentWeek.sessions.filter(s => s.completed).length;
+  const progressPercent = Math.round((completedCount / currentWeek.sessions.length) * 100) || 0;
+
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
-      <header className="bg-slate-950 border-b border-slate-800 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-4">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans flex flex-col antialiased">
+      {/* Top Header - Style Campus */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">
-              <Mountain className="w-6 h-6" />
+            <div className="w-10 h-10 bg-amber-400 rounded-xl flex items-center justify-center font-black text-slate-900 shadow-sm">
+              <Mountain className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
-              <span className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-teal-200 bg-clip-text text-transparent">
-                TrailFit AI
+              <span className="text-xl font-extrabold tracking-tight text-slate-900">
+                CAMPUS<span className="text-amber-500">TRAIL</span>
               </span>
-              <span className="text-xs text-slate-500 block">Coaching intelligent & D+</span>
             </div>
           </div>
 
-          <nav className="flex gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800 text-sm">
+          <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
             <button 
               onClick={() => setActiveTab('dashboard')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${activeTab === 'dashboard' ? 'bg-emerald-500 text-slate-950 font-semibold' : 'text-slate-400 hover:text-white'}`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'dashboard' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
             >
-              Tableau de bord
+              Mon Programme
             </button>
             <button 
               onClick={() => setActiveTab('generator')}
-              className={`px-4 py-2 rounded-lg font-medium transition-all ${activeTab === 'generator' ? 'bg-emerald-500 text-slate-950 font-semibold' : 'text-slate-400 hover:text-white'}`}
+              className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'generator' 
+                  ? 'bg-white text-slate-900 shadow-sm' 
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
             >
-              Générer un Plan
+              Nouveau Plan IA
             </button>
           </nav>
 
-          <div className="flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-full">
-              <Radio className="w-3.5 h-3.5 animate-pulse" />
-              <span>Gemini AI : Connecté</span>
-            </div>
+          <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+            <span>Gemini AI connecté</span>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
         {activeTab === 'dashboard' ? (
-          <div className="space-y-6">
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6">
-              <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <div className="space-y-8">
+            
+            {/* Bannière Objectif principal (Header de séance) */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-sm">
+              <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-6">
                 <div>
-                  <div className="text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-1">
-                    Objectif (J-{profile.weeksRemaining * 7})
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="bg-amber-100 text-amber-800 text-[11px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider">
+                      Objectif J-{(currentWeek.totalWeeks || profile.weeksRemaining) * 7}
+                    </span>
+                    <span className="text-xs font-medium text-slate-400">•</span>
+                    <span className="text-xs font-bold text-slate-500">{profile.level}</span>
                   </div>
-                  <h1 className="text-2xl md:text-3xl font-extrabold text-white">
-                    {profile.targetRace} — {profile.targetDistance} km / {profile.targetElevation}m D+
+                  <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                    {profile.targetRace}
                   </h1>
-                  <p className="text-sm text-slate-400 mt-1">
-                    Semaine {currentWeek.number} sur {currentWeek.totalWeeks || profile.weeksRemaining} : <span className="text-slate-200 font-medium">{currentWeek.phase}</span> — {currentWeek.focus}
+                  <p className="text-sm font-medium text-slate-500 mt-1 flex items-center gap-3">
+                    <span><strong>{profile.targetDistance} km</strong></span>
+                    <span>•</span>
+                    <span><strong className="text-amber-600">+{profile.targetElevation}m D+</strong></span>
                   </p>
                 </div>
 
-                <div className="flex gap-4 border-t md:border-t-0 md:border-l border-slate-800 pt-4 md:pt-0 md:pl-6">
-                  <div>
-                    <div className="text-xs text-slate-500">Volume</div>
-                    <div className="text-lg font-bold text-white">{currentWeek.targetKm} km</div>
+                {/* Statut de progression de la semaine */}
+                <div className="flex items-center gap-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="text-center px-2">
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Semaine</div>
+                    <div className="text-xl font-black text-slate-900">{currentWeek.number} <span className="text-xs font-bold text-slate-400">/ {currentWeek.totalWeeks || profile.weeksRemaining}</span></div>
                   </div>
-                  <div>
-                    <div className="text-xs text-slate-500">D+ Prévu</div>
-                    <div className="text-lg font-bold text-emerald-400">{currentWeek.targetDPlus}m</div>
+                  <div className="h-8 w-px bg-slate-200"></div>
+                  <div className="text-center px-2">
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Volume</div>
+                    <div className="text-xl font-black text-slate-900">{currentWeek.targetKm} <span className="text-xs font-bold text-slate-400">km</span></div>
+                  </div>
+                  <div className="h-8 w-px bg-slate-200"></div>
+                  <div className="text-center px-2">
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Dénivelé</div>
+                    <div className="text-xl font-black text-amber-600">+{currentWeek.targetDPlus}m</div>
                   </div>
                 </div>
               </div>
 
-              {/* Navigation entre Semaines */}
-              <div className="mt-6 pt-4 border-t border-slate-900 flex justify-between items-center text-xs">
-                <button
-                  disabled={currentWeek.number <= 1 || isLoading}
-                  onClick={() => loadWeek(currentWeek.number - 1)}
-                  className="flex items-center gap-1 bg-slate-900 border border-slate-800 hover:border-slate-700 disabled:opacity-40 px-3 py-1.5 rounded-xl font-medium"
-                >
-                  <ChevronLeft className="w-4 h-4" /> Semaine précédente
-                </button>
+              {/* Barre de progression globale */}
+              <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex-1 max-w-md">
+                  <div className="flex justify-between text-xs font-bold text-slate-600 mb-1.5">
+                    <span>SÉANCE {completedCount} SUR {currentWeek.sessions.length} EFFECTUÉE(S)</span>
+                    <span>{progressPercent}%</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-amber-400 transition-all duration-500 rounded-full"
+                      style={{ width: `${progressPercent}%` }}
+                    ></div>
+                  </div>
+                </div>
 
-                <span className="font-bold text-slate-300">
-                  {isLoading ? 'Génération en cours...' : `Semaine ${currentWeek.number}`}
-                </span>
-
-                <button
-                  disabled={currentWeek.number >= (currentWeek.totalWeeks || profile.weeksRemaining) || isLoading}
-                  onClick={() => loadWeek(currentWeek.number + 1)}
-                  className="flex items-center gap-1 bg-slate-900 border border-slate-800 hover:border-slate-700 disabled:opacity-40 px-3 py-1.5 rounded-xl font-medium text-emerald-400"
-                >
-                  Semaine suivante <ChevronRight className="w-4 h-4" />
-                </button>
+                {/* Navigation entre semaines */}
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={currentWeek.number <= 1 || isLoading}
+                    onClick={() => loadWeek(currentWeek.number - 1)}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 rounded-xl transition-all text-slate-700"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <span className="text-xs font-black uppercase text-slate-700 px-3">
+                    {isLoading ? 'Chargement...' : `Semaine ${currentWeek.number}`}
+                  </span>
+                  <button
+                    disabled={currentWeek.number >= (currentWeek.totalWeeks || profile.weeksRemaining) || isLoading}
+                    onClick={() => loadWeek(currentWeek.number + 1)}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-30 rounded-xl transition-all text-slate-700"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Grid principale : Séances à gauche / État de forme à droite */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              
+              {/* Colonne des Séances */}
               <div className="lg:col-span-2 space-y-4">
-                <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-emerald-400" />
-                  Programme de la Semaine
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-amber-500" />
+                    Programme de la Semaine
+                  </h2>
+                  <span className="text-xs font-semibold text-slate-500">
+                    Phase : <strong className="text-slate-800">{currentWeek.phase}</strong>
+                  </span>
+                </div>
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {currentWeek.sessions.map((session) => (
                     <div 
                       key={session.id}
-                      className={`p-5 rounded-2xl border transition-all ${
+                      className={`bg-white border rounded-2xl p-6 transition-all duration-200 ${
                         session.completed 
-                          ? 'bg-slate-950/40 border-slate-800/80 opacity-75' 
-                          : 'bg-slate-950 border-slate-800'
+                          ? 'border-slate-200 bg-slate-50/60 opacity-80' 
+                          : 'border-slate-200 hover:border-slate-300 shadow-sm'
                       }`}
                     >
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 border border-slate-700 mr-2">
+                      <div className="flex justify-between items-start gap-4 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-slate-900 text-white text-xs font-bold px-2.5 py-1 rounded-lg">
                             {session.day}
                           </span>
-                          <span className="text-xs font-semibold text-emerald-400">
+                          <span className="text-xs font-extrabold uppercase tracking-wide text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200/60">
                             {session.type}
                           </span>
                         </div>
-                        
+
                         <button
                           onClick={() => toggleSession(session.id)}
-                          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border ${
+                          className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-xl border transition-all ${
                             session.completed 
-                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300' 
-                              : 'bg-slate-900 border-slate-700 text-slate-400'
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-700' 
+                              : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
                           }`}
                         >
-                          <CheckCircle2 className="w-4 h-4" />
-                          {session.completed ? 'Terminée' : 'Marquer faite'}
+                          <CheckCircle2 className={`w-4 h-4 ${session.completed ? 'text-emerald-600' : 'text-slate-400'}`} />
+                          {session.completed ? 'Validée' : 'Valider'}
                         </button>
                       </div>
 
-                      <h3 className="text-base font-bold text-white mb-1">{session.title}</h3>
-                      <p className="text-xs text-slate-400 mb-4">{session.desc}</p>
+                      <h3 className="text-base font-bold text-slate-900 mb-1">
+                        {session.title}
+                      </h3>
+                      <p className="text-xs font-medium text-slate-600 leading-relaxed mb-4">
+                        {session.desc}
+                      </p>
 
-                      <div className="flex flex-wrap gap-4 text-xs font-medium text-slate-300 border-t border-slate-900 pt-3">
-                        <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-500" /> {session.duration}</span>
-                        <span className="flex items-center gap-1.5"><TrendingUp className="w-3.5 h-3.5 text-slate-500" /> {session.distance}</span>
-                        <span className="flex items-center gap-1.5"><Mountain className="w-3.5 h-3.5 text-slate-500" /> {session.elevation}</span>
+                      <div className="flex flex-wrap gap-4 pt-3 border-t border-slate-100 text-xs font-bold text-slate-600">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-4 h-4 text-slate-400" />
+                          <span>{session.duration}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <TrendingUp className="w-4 h-4 text-slate-400" />
+                          <span>{session.distance}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Mountain className="w-4 h-4 text-amber-500" />
+                          <span className="text-amber-700">{session.elevation}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
+              {/* Colonne de droite : Forme & IA Adaptative */}
               <div className="space-y-6">
-                <div className="bg-slate-950 border border-slate-800 p-5 rounded-2xl space-y-4">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-amber-400" />
-                    <h2 className="text-base font-bold text-white">Ajustement IA</h2>
+                <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-5">
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-amber-500" />
+                      État de Forme & IA
+                    </h3>
+                    <p className="text-xs font-medium text-slate-500 mt-1">
+                      Signalez votre niveau de fatigue pour ajuster instantanément vos séances.
+                    </p>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-2.5">
                     <button
                       onClick={() => handleAdapt('normal')}
-                      className={`w-full p-3 rounded-xl border text-left text-xs ${fatigueStatus === 'normal' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-300' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
+                      className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between ${
+                        fatigueStatus === 'normal' 
+                          ? 'bg-amber-50 border-amber-300 text-slate-900 font-bold' 
+                          : 'bg-slate-50 border-slate-200 text-slate-600 font-medium hover:bg-slate-100'
+                      }`}
                     >
-                      <Heart className="w-4 h-4 text-emerald-400 mb-1" />
-                      <div className="font-bold">En forme</div>
+                      <div className="flex items-center gap-3">
+                        <Heart className="w-4 h-4 text-emerald-500" />
+                        <span className="text-xs">En forme maximale</span>
+                      </div>
+                      {fatigueStatus === 'normal' && <div className="w-2 h-2 rounded-full bg-amber-500"></div>}
                     </button>
 
                     <button
                       onClick={() => handleAdapt('fatigued')}
-                      className={`w-full p-3 rounded-xl border text-left text-xs ${fatigueStatus === 'fatigued' ? 'bg-amber-500/10 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
+                      className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between ${
+                        fatigueStatus === 'fatigued' 
+                          ? 'bg-amber-50 border-amber-300 text-slate-900 font-bold' 
+                          : 'bg-slate-50 border-slate-200 text-slate-600 font-medium hover:bg-slate-100'
+                      }`}
                     >
-                      <AlertCircle className="w-4 h-4 text-amber-400 mb-1" />
-                      <div className="font-bold">Fatigué</div>
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                        <span className="text-xs">Fatigue / Manque de temps</span>
+                      </div>
+                      {fatigueStatus === 'fatigued' && <div className="w-2 h-2 rounded-full bg-amber-500"></div>}
                     </button>
 
                     <button
                       onClick={() => handleAdapt('injured')}
-                      className={`w-full p-3 rounded-xl border text-left text-xs ${fatigueStatus === 'injured' ? 'bg-rose-500/10 border-rose-500 text-rose-300' : 'bg-slate-900 border-slate-800 text-slate-400'}`}
+                      className={`w-full p-3.5 rounded-xl border text-left transition-all flex items-center justify-between ${
+                        fatigueStatus === 'injured' 
+                          ? 'bg-amber-50 border-amber-300 text-slate-900 font-bold' 
+                          : 'bg-slate-50 border-slate-200 text-slate-600 font-medium hover:bg-slate-100'
+                      }`}
                     >
-                      <Activity className="w-4 h-4 text-rose-400 mb-1" />
-                      <div className="font-bold">Gêne / Blessure</div>
+                      <div className="flex items-center gap-3">
+                        <Activity className="w-4 h-4 text-rose-500" />
+                        <span className="text-xs">Gêne musculaire / Douleur</span>
+                      </div>
+                      {fatigueStatus === 'injured' && <div className="w-2 h-2 rounded-full bg-amber-500"></div>}
                     </button>
                   </div>
 
                   {aiFeedback && (
-                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl flex items-start gap-2 text-xs text-slate-300">
-                      <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="p-4 bg-slate-900 text-white rounded-xl text-xs font-medium leading-relaxed flex items-start gap-3 shadow-sm">
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <div>{aiFeedback}</div>
                     </div>
                   )}
                 </div>
               </div>
+
             </div>
+
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-8">
-            <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-emerald-400" />
-              Générer un Plan IA
-            </h2>
+          /* Formulaire de génération - Style Campus */
+          <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
+            <div className="text-center mb-8">
+              <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-amber-600">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                Générer un Plan Trail IA
+              </h2>
+              <p className="text-xs font-medium text-slate-500 mt-1">
+                Configurez votre objectif. Gemini calculera vos séances adaptées.
+              </p>
+            </div>
 
             {errorMsg && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-xl text-xs mb-4">
+              <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold mb-6">
                 {errorMsg}
               </div>
             )}
 
-            <form onSubmit={handleGeneratePlan} className="space-y-4 text-xs">
+            <form onSubmit={handleGeneratePlan} className="space-y-5 text-xs font-bold text-slate-700">
               <div>
-                <label className="block text-slate-400 mb-1">Nom de l'épreuve</label>
+                <label className="block uppercase tracking-wider mb-2">Nom de la course / Objectif</label>
                 <input 
                   type="text" 
                   value={profile.targetRace} 
                   onChange={(e) => setProfile({...profile, targetRace: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-slate-900 font-semibold focus:outline-none focus:border-amber-400 focus:bg-white transition-all"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-400 mb-1">Distance (km)</label>
+                  <label className="block uppercase tracking-wider mb-2">Distance (km)</label>
                   <input 
                     type="number" 
                     value={profile.targetDistance} 
                     onChange={(e) => setProfile({...profile, targetDistance: Number(e.target.value)})}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-slate-900 font-semibold focus:outline-none focus:border-amber-400 focus:bg-white transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">Dénivelé Positif (D+)</label>
+                  <label className="block uppercase tracking-wider mb-2">Dénivelé (D+)</label>
                   <input 
                     type="number" 
                     value={profile.targetElevation} 
                     onChange={(e) => setProfile({...profile, targetElevation: Number(e.target.value)})}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-900 text-amber-400 border border-slate-800 rounded-xl p-3.5 font-bold focus:outline-none focus:border-amber-400 transition-all"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-slate-400 mb-1">Semaines de prépa</label>
+                  <label className="block uppercase tracking-wider mb-2">Semaines de préparation</label>
                   <input 
                     type="number" 
                     value={profile.weeksRemaining} 
                     onChange={(e) => setProfile({...profile, weeksRemaining: Number(e.target.value)})}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-slate-900 font-semibold focus:outline-none focus:border-amber-400 focus:bg-white transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">Séances / semaine</label>
+                  <label className="block uppercase tracking-wider mb-2">Séances par semaine</label>
                   <input 
                     type="number" 
                     value={profile.sessionsPerWeek} 
                     onChange={(e) => setProfile({...profile, sessionsPerWeek: Number(e.target.value)})}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-slate-900 font-semibold focus:outline-none focus:border-amber-400 focus:bg-white transition-all"
                   />
                 </div>
               </div>
@@ -392,15 +513,15 @@ export default function App() {
               <button 
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-emerald-500 text-slate-950 font-bold p-3.5 rounded-xl hover:bg-emerald-400 transition-all mt-4 flex items-center justify-center gap-2"
+                className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-black p-4 rounded-xl transition-all shadow-md shadow-amber-400/20 mt-6 flex items-center justify-center gap-2 text-sm uppercase tracking-wider"
               >
                 {isLoading ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    Création du plan par l'IA...
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    Calcul du plan d'entraînement...
                   </>
                 ) : (
-                  'Générer mon plan avec Gemini'
+                  'Lancer la génération Gemini'
                 )}
               </button>
             </form>
