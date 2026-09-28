@@ -47,24 +47,46 @@ Génère la semaine ${weekNumber} au format JSON exact suivant :
 }
 `;
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" }
-      })
-    }
-  );
+  // Liste des modèles par ordre de préférence
+  const models = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(`Erreur API Gemini (${response.status}) : ${errorData.error?.message || 'URL ou clé invalide'}`);
+  for (const model of models) {
+    let attempts = 0;
+    const maxAttempts = 2;
+
+    while (attempts < maxAttempts) {
+      try {
+        attempts++;
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: { responseMimeType: "application/json" }
+            })
+          }
+        );
+
+        if (response.status === 503) {
+          // Si le serveur est saturé, on attend 1,5 seconde avant de réessayer
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          continue;
+        }
+
+        if (!response.ok) {
+          break; // Passer au modèle suivant si l'erreur n'est pas un 503
+        }
+
+        const data = await response.json();
+        const rawText = data.candidates[0].content.parts[0].text;
+        return JSON.parse(rawText);
+      } catch (err) {
+        if (attempts >= maxAttempts) break;
+      }
+    }
   }
 
-  const data = await response.json();
-  const rawText = data.candidates[0].content.parts[0].text;
-  return JSON.parse(rawText);
+  throw new Error("Les serveurs sont actuellement surchargés. Veuillez réétenter dans quelques instants.");
 }
