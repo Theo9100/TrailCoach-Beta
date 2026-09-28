@@ -12,20 +12,14 @@ import {
   RefreshCw,
   Calendar,
   ChevronLeft,
-  ChevronRight,
-  Flame,
-  Award,
-  BarChart3,
-  Sliders,
-  ChevronDown,
-  User
+  ChevronRight
 } from 'lucide-react';
 import { generateTrailPlan } from './services/gemini';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [fatigueStatus, setFatigueStatus] = useState('normal');
-  const [aiFeedback, setAiFeedback] = useState('');
+  const [feedbackMsg, setFeedbackMsg] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -114,7 +108,7 @@ export default function App() {
       setCurrentWeek(generatedWeek);
       setActiveTab('dashboard');
     } catch (err) {
-      setErrorMsg(err.message || 'Erreur lors de la génération du plan');
+      setErrorMsg(err.message || 'Erreur lors de la préparation du plan');
     } finally {
       setIsLoading(false);
     }
@@ -138,7 +132,7 @@ export default function App() {
     let updatedSessions = [...currentWeek.sessions];
 
     if (status === 'fatigued') {
-      feedback = "Charge adaptée : Sortie longue réduite de 35% pour vous préserver.";
+      feedback = "Charge adaptée : Sortie longue réduite de 35% pour favoriser la récupération.";
       updatedSessions = updatedSessions.map(s => {
         if (s.type.toLowerCase().includes('longue') || s.type.toLowerCase().includes('qualité')) {
           return { ...s, duration: '1h15', elevation: '200m D+', desc: 'Séance raccourcie suite à ton signal de fatigue.' };
@@ -146,7 +140,7 @@ export default function App() {
         return s;
       });
     } else if (status === 'injured') {
-      feedback = "Alerte blessure : Remplacement immédiat des impacts par du Cross-Training.";
+      feedback = "Alerte gêne : Remplacement des impacts au sol par du Cross-Training.";
       updatedSessions = updatedSessions.map(s => {
         if (!s.completed) return { ...s, type: 'Cross-Training', title: 'Vélo / Home-Trainer', elevation: '0m D+', desc: 'Maintien du travail cardio sans choc sur les articulations.' };
         return s;
@@ -155,7 +149,7 @@ export default function App() {
       feedback = "Forme confirmée : Programme maintenu à 100%.";
     }
 
-    setAiFeedback(feedback);
+    setFeedbackMsg(feedback);
     setCurrentWeek(prev => ({ ...prev, sessions: updatedSessions }));
   };
 
@@ -164,16 +158,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-800 font-sans flex flex-col antialiased">
-      {/* Top Header - Style Campus */}
+      {/* Top Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-400 rounded-xl flex items-center justify-center font-black text-slate-900 shadow-sm">
               <Mountain className="w-6 h-6 stroke-[2.5]" />
             </div>
-            <div>
+            <div className="flex items-center gap-2">
               <span className="text-xl font-extrabold tracking-tight text-slate-900">
-                CAMPUS<span className="text-amber-500">TRAIL</span>
+                TRAIL<span className="text-amber-500">COACH</span>
+              </span>
+              <span className="bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider">
+                BETA
               </span>
             </div>
           </div>
@@ -197,14 +194,9 @@ export default function App() {
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              Nouveau Plan IA
+              Nouveau Plan
             </button>
           </nav>
-
-          <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span>Gemini AI connecté</span>
-          </div>
         </div>
       </header>
 
@@ -212,7 +204,7 @@ export default function App() {
         {activeTab === 'dashboard' ? (
           <div className="space-y-8">
             
-            {/* Bannière Objectif principal (Header de séance) */}
+            {/* Bannière Objectif principal */}
             <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-8 shadow-sm">
               <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-6">
                 <div>
@@ -290,7 +282,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Grid principale : Séances à gauche / État de forme à droite */}
+            {/* Grid principale */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               
               {/* Colonne des Séances */}
@@ -364,13 +356,13 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Colonne de droite : Forme & IA Adaptative */}
+              {/* Colonne de droite : État de Forme */}
               <div className="space-y-6">
                 <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-5">
                   <div>
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider flex items-center gap-2">
                       <Zap className="w-4 h-4 text-amber-500" />
-                      État de Forme & IA
+                      Ajustement du Programme
                     </h3>
                     <p className="text-xs font-medium text-slate-500 mt-1">
                       Signalez votre niveau de fatigue pour ajuster instantanément vos séances.
@@ -424,10 +416,10 @@ export default function App() {
                     </button>
                   </div>
 
-                  {aiFeedback && (
+                  {feedbackMsg && (
                     <div className="p-4 bg-slate-900 text-white rounded-xl text-xs font-medium leading-relaxed flex items-start gap-3 shadow-sm">
                       <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                      <div>{aiFeedback}</div>
+                      <div>{feedbackMsg}</div>
                     </div>
                   )}
                 </div>
@@ -437,17 +429,17 @@ export default function App() {
 
           </div>
         ) : (
-          /* Formulaire de génération - Style Campus */
+          /* Formulaire de génération */
           <div className="max-w-xl mx-auto bg-white border border-slate-200 rounded-2xl p-8 shadow-sm">
             <div className="text-center mb-8">
               <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-3 text-amber-600">
-                <Sparkles className="w-6 h-6" />
+                <Mountain className="w-6 h-6" />
               </div>
               <h2 className="text-2xl font-black text-slate-900 tracking-tight">
-                Générer un Plan Trail IA
+                Générer un Plan Trail
               </h2>
               <p className="text-xs font-medium text-slate-500 mt-1">
-                Configurez votre objectif. Gemini calculera vos séances adaptées.
+                Configurez votre objectif. Nous calculerons vos séances adaptées.
               </p>
             </div>
 
@@ -521,7 +513,7 @@ export default function App() {
                     Calcul du plan d'entraînement...
                   </>
                 ) : (
-                  'Lancer la génération Gemini'
+                  'Générer mon plan d\'entraînement'
                 )}
               </button>
             </form>
