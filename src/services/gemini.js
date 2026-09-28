@@ -1,45 +1,52 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
-export async function generateTrailPlan(profile) {
+export async function generateTrailPlan(profile, weekNumber = 1) {
   if (!GEMINI_API_KEY) {
     throw new Error("Clé API Gemini manquante dans Vercel (VITE_GEMINI_API_KEY).");
   }
 
   const prompt = `
 Tu es un entraîneur expert en trail et ultra-trail.
-Génère un plan d'entraînement sur-mesure au format JSON strict, sans texte autour et sans balises markdown (pas de \`\`\`json).
+Génère la SEMAINE ${weekNumber} sur un total de ${profile.weeksRemaining} semaines de préparation au format JSON strict (sans balises markdown).
 
 Profil du coureur :
 - Nom : ${profile.name}
 - Objectif : ${profile.targetRace} (${profile.targetDistance} km, ${profile.targetElevation}m D+)
-- Temps restant : ${profile.weeksRemaining} semaines
+- Temps total de prépa : ${profile.weeksRemaining} semaines
+- Semaine actuelle à générer : Semaine ${weekNumber}
 - Niveau : ${profile.level} (VMA: ${profile.vma} km/h)
 - Séances par semaine : ${profile.sessionsPerWeek}
 
-Génère la première semaine de préparation avec la structure JSON exacte suivante :
+Règles de progression :
+- Semaines 1 à ${Math.floor(profile.weeksRemaining * 0.4)} : Phase Foncier (Endurance, PPG, volume progressif +10%/sem).
+- Semaines ${Math.floor(profile.weeksRemaining * 0.4) + 1} à ${profile.weeksRemaining - 1} : Phase Spécifique (Rando-course, blocs d'allure cible, D+ max).
+- Semaine ${profile.weeksRemaining} : Phase Affûtage (Baisse de volume de 50%, fraîcheur avant la course).
+- Applique une semaine d'assimilation (charge réduite) toutes les 3 semaines.
+
+Génère la semaine ${weekNumber} au format JSON exact suivant :
 {
-  "number": 1,
-  "phase": "Foncier & Reprise",
-  "focus": "Développement de l'endurance de base et PPG",
-  "targetKm": 38,
-  "targetDPlus": 850,
+  "number": ${weekNumber},
+  "totalWeeks": ${profile.weeksRemaining},
+  "phase": "Nom de la phase",
+  "focus": "Objectif principal de cette semaine",
+  "targetKm": 42,
+  "targetDPlus": 1100,
   "sessions": [
     {
       "id": 1,
       "day": "Mardi",
-      "type": "Relâchement",
-      "title": "Footing Endurance Fondamentale",
-      "duration": "50 min",
-      "distance": "8 km",
-      "elevation": "100m D+",
-      "desc": "Aisance respiratoire totale.",
+      "type": "Qualité / EF / Longue / PPG",
+      "title": "Titre de la séance",
+      "duration": "1h15",
+      "distance": "12 km",
+      "elevation": "300m D+",
+      "desc": "Description concise des blocs et conseils.",
       "completed": false
     }
   ]
 }
 `;
 
-  // Utilisation du modèle demandé : gemini-3.8-flash
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`,
     {
