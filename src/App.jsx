@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Mountain, 
   Activity, 
@@ -11,7 +11,9 @@ import {
   Heart, 
   RefreshCw,
   Calendar,
-  Radio
+  Radio,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { generateTrailPlan } from './services/gemini';
 
@@ -22,51 +24,80 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const [profile, setProfile] = useState({
-    name: 'Alexandre',
-    targetRace: 'Maratrail du Ventoux',
-    targetDistance: 42,
-    targetElevation: 2100,
-    weeksRemaining: 8,
-    level: 'Intermédiaire',
-    vma: 15.5,
-    sessionsPerWeek: 4
+  // Profil de l'utilisateur
+  const [profile, setProfile] = useState(() => {
+    const savedProfile = localStorage.getItem('trailfit_profile');
+    if (savedProfile) {
+      try { return JSON.parse(savedProfile); } catch (e) {}
+    }
+    return {
+      name: 'Alexandre',
+      targetRace: 'Maratrail du Ventoux',
+      targetDistance: 42,
+      targetElevation: 2100,
+      weeksRemaining: 8,
+      level: 'Intermédiaire',
+      vma: 15.5,
+      sessionsPerWeek: 4
+    };
   });
 
-  const [currentWeek, setCurrentWeek] = useState({
-    number: 1,
-    phase: 'Foncier & Reprise',
-    focus: 'Base d\'endurance et dénivelé progressif',
-    targetKm: 40,
-    targetDPlus: 1200,
-    sessions: [
-      {
-        id: 1,
-        day: 'Mardi',
-        type: 'Relâchement',
-        title: 'Footing EF',
-        duration: '50 min',
-        distance: '8 km',
-        elevation: '100m D+',
-        desc: 'Aisance respiratoire totale.',
-        completed: false
-      }
-    ]
+  // Plan de la semaine (avec lecture dans localStorage)
+  const [currentWeek, setCurrentWeek] = useState(() => {
+    const savedPlan = localStorage.getItem('trailfit_current_week');
+    if (savedPlan) {
+      try { return JSON.parse(savedPlan); } catch (e) {}
+    }
+    return {
+      number: 1,
+      totalWeeks: 8,
+      phase: 'Foncier & Reprise',
+      focus: 'Base d\'endurance et dénivelé progressif',
+      targetKm: 40,
+      targetDPlus: 1200,
+      sessions: [
+        {
+          id: 1,
+          day: 'Mardi',
+          type: 'Relâchement',
+          title: 'Footing EF',
+          duration: '50 min',
+          distance: '8 km',
+          elevation: '100m D+',
+          desc: 'Aisance respiratoire totale.',
+          completed: false
+        }
+      ]
+    };
   });
 
-  const handleGeneratePlan = async (e) => {
-    e.preventDefault();
+  // Sauvegarde automatique du profil et du plan
+  useEffect(() => {
+    localStorage.setItem('trailfit_profile', JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
+    localStorage.setItem('trailfit_current_week', JSON.stringify(currentWeek));
+  }, [currentWeek]);
+
+  // Génération ou chargement d'une semaine spécifique
+  const loadWeek = async (weekNum) => {
     setIsLoading(true);
     setErrorMsg('');
     try {
-      const generatedWeek = await generateTrailPlan(profile);
+      const generatedWeek = await generateTrailPlan(profile, weekNum);
       setCurrentWeek(generatedWeek);
       setActiveTab('dashboard');
     } catch (err) {
-      setErrorMsg(err.message || 'Erreur lors de la génération');
+      setErrorMsg(err.message || 'Erreur lors de la génération du plan');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleGeneratePlan = (e) => {
+    e.preventDefault();
+    loadWeek(1);
   };
 
   const toggleSession = (id) => {
@@ -84,15 +115,15 @@ export default function App() {
     if (status === 'fatigued') {
       feedback = "IA Coach : Charge réajustée. La sortie longue est réduite (-30% D+) pour favoriser la récupération.";
       updatedSessions = updatedSessions.map(s => {
-        if (s.title.toLowerCase().includes('longue') || s.type.toLowerCase().includes('spécifique')) {
-          return { ...s, duration: '1h30', elevation: '200m D+', desc: 'Séance raccourcie pour éviter le surentraînement.' };
+        if (s.type.toLowerCase().includes('longue') || s.type.toLowerCase().includes('spécifique') || s.type.toLowerCase().includes('qualité')) {
+          return { ...s, duration: '1h15', elevation: '150m D+', desc: 'Séance raccourcie pour éviter le surentraînement.' };
         }
         return s;
       });
     } else if (status === 'injured') {
       feedback = "IA Coach : Alerte gêne/douleur. Les séances à impact au sol sont remplacées par du Cross-Training.";
       updatedSessions = updatedSessions.map(s => {
-        if (!s.completed) return { ...s, type: 'Cross-Training', title: 'Vélo / Home-Trainer', elevation: '0m D+', desc: 'Effort fluide sans impact.' };
+        if (!s.completed) return { ...s, type: 'Cross-Training', title: 'Vélo / Home-Trainer', elevation: '0m D+', desc: 'Effort fluide sans impact au sol.' };
         return s;
       });
     } else {
@@ -156,7 +187,7 @@ export default function App() {
                     {profile.targetRace} — {profile.targetDistance} km / {profile.targetElevation}m D+
                   </h1>
                   <p className="text-sm text-slate-400 mt-1">
-                    Semaine {currentWeek.number} : <span className="text-slate-200 font-medium">{currentWeek.phase}</span> — {currentWeek.focus}
+                    Semaine {currentWeek.number} sur {currentWeek.totalWeeks || profile.weeksRemaining} : <span className="text-slate-200 font-medium">{currentWeek.phase}</span> — {currentWeek.focus}
                   </p>
                 </div>
 
@@ -171,13 +202,36 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* Navigation entre Semaines */}
+              <div className="mt-6 pt-4 border-t border-slate-900 flex justify-between items-center text-xs">
+                <button
+                  disabled={currentWeek.number <= 1 || isLoading}
+                  onClick={() => loadWeek(currentWeek.number - 1)}
+                  className="flex items-center gap-1 bg-slate-900 border border-slate-800 hover:border-slate-700 disabled:opacity-40 px-3 py-1.5 rounded-xl font-medium"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Semaine précédente
+                </button>
+
+                <span className="font-bold text-slate-300">
+                  {isLoading ? 'Génération en cours...' : `Semaine ${currentWeek.number}`}
+                </span>
+
+                <button
+                  disabled={currentWeek.number >= (currentWeek.totalWeeks || profile.weeksRemaining) || isLoading}
+                  onClick={() => loadWeek(currentWeek.number + 1)}
+                  className="flex items-center gap-1 bg-slate-900 border border-slate-800 hover:border-slate-700 disabled:opacity-40 px-3 py-1.5 rounded-xl font-medium text-emerald-400"
+                >
+                  Semaine suivante <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-emerald-400" />
-                  Programme Généré par IA
+                  Programme de la Semaine
                 </h2>
 
                 <div className="space-y-3">
