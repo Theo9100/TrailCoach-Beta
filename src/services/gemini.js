@@ -9,7 +9,7 @@ export async function generateTrailPlan(profile, weekNumber = 1) {
 
   const prompt = `
 Tu es un entraîneur expert en trail et ultra-trail.
-Génère la SEMAINE ${weekNumber} sur un total de ${profile.weeksRemaining} semaines de préparation au format JSON strict (sans balises markdown).
+Génère la SEMAINE ${weekNumber} sur un total de ${profile.weeksRemaining} semaines de préparation au format JSON strict (sans texte explicatif, sans balises markdown).
 
 Profil du coureur :
 - Nom : ${profile.name}
@@ -43,49 +43,61 @@ Génère la semaine ${weekNumber} au format JSON exact suivant :
 }
 `;
 
-  // Temporisation de sécurité de 1,5 seconde
-  await delay(1500);
-
-  // Modèle valide : gemini-3.8-flash
-  const model = 'gemini-3.8-flash';
+  const MODEL_NAME = "gemini-3.8-flash";
   let attempts = 0;
   const maxAttempts = 3;
-  let lastError = null;
+  let lastError = "Erreur inconnue";
 
   while (attempts < maxAttempts) {
     try {
       attempts++;
+      
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: "application/json" }
+            generationConfig: { 
+              responseMimeType: "application/json" 
+            }
           })
         }
       );
 
       if (response.status === 503 || response.status === 429) {
-        await delay(2500 * attempts);
+        lastError = `Serveur temporairement indisponible (${response.status})`;
+        await delay(2000 * attempts);
         continue;
       }
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        lastError = errData.error?.message || `Code HTTP ${response.status}`;
-        break;
+        lastError = errData.error?.message || `Erreur HTTP ${response.status}`;
+        await delay(1500);
+        continue;
       }
 
       const data = await response.json();
+      
+      if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+        lastError = "Structure de réponse Gemini invalide.";
+        await delay(1500);
+        continue;
+      }
+
       const rawText = data.candidates[0].content.parts[0].text;
-      return JSON.parse(rawText);
+      const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(cleanJson);
+
     } catch (err) {
-      lastError = err.message;
-      await delay(2000);
+      lastError = err?.message || "Erreur réseau ou d'analyse JSON";
+      if (attempts < maxAttempts) {
+        await delay(1500);
+      }
     }
   }
 
-  throw new Error(`Erreur de génération (${lastError}). Veuillez réétenter.`);
+  throw new Error(`Erreur API (${lastError}). Veuillez réessayer.`);
 }
