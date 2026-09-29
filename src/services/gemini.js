@@ -43,52 +43,49 @@ Génère la semaine ${weekNumber} au format JSON exact suivant :
 }
 `;
 
-  // Pause préventive de 2 secondes pour respecter le quota gratuit
-  await delay(2000);
+  // Temporisation de sécurité de 1,5 seconde
+  await delay(1500);
 
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  // Modèle valide : gemini-3.8-flash
+  const model = 'gemini-3.8-flash';
+  let attempts = 0;
+  const maxAttempts = 3;
   let lastError = null;
 
-  for (const model of models) {
-    let attempts = 0;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts) {
-      try {
-        attempts++;
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: "application/json" }
-            })
-          }
-        );
-
-        if (response.status === 503 || response.status === 429) {
-          // Attente exponentielle en cas de surcharge temporaire
-          await delay(3000 * attempts);
-          continue;
+  while (attempts < maxAttempts) {
+    try {
+      attempts++;
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" }
+          })
         }
+      );
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          lastError = errData.error?.message || `Code HTTP ${response.status}`;
-          break;
-        }
-
-        const data = await response.json();
-        const rawText = data.candidates[0].content.parts[0].text;
-        return JSON.parse(rawText);
-      } catch (err) {
-        lastError = err.message;
-        await delay(2000);
+      if (response.status === 503 || response.status === 429) {
+        await delay(2500 * attempts);
+        continue;
       }
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        lastError = errData.error?.message || `Code HTTP ${response.status}`;
+        break;
+      }
+
+      const data = await response.json();
+      const rawText = data.candidates[0].content.parts[0].text;
+      return JSON.parse(rawText);
+    } catch (err) {
+      lastError = err.message;
+      await delay(2000);
     }
   }
 
-  throw new Error(`Serveur indisponible (${lastError}). Réessaie dans quelques secondes.`);
+  throw new Error(`Erreur de génération (${lastError}). Veuillez réétenter.`);
 }
