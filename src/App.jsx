@@ -13,28 +13,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
-  User,
   Upload,
-  BarChart3,
-  Sliders,
-  Check,
   Sparkles,
   ArrowRight,
-  Target,
-  Gauge,
-  Compass,
   Moon,
   Sun
 } from 'lucide-react';
 import { generateTrailPlan } from './services/gemini';
 
 export default function App() {
-  // Changement dynamique du titre de l'onglet du navigateur
   useEffect(() => {
     document.title = "TrailCoach Beta";
   }, []);
 
-  // Détection et gestion du Mode Sombre
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('trailfit_dark_mode') === 'true';
   });
@@ -43,14 +34,12 @@ export default function App() {
     localStorage.setItem('trailfit_dark_mode', darkMode);
   }, [darkMode]);
 
-  // Détection du premier lancement
   const [isOnboarding, setIsOnboarding] = useState(() => {
     return !localStorage.getItem('trailfit_onboarding_completed');
   });
 
   const [onboardingStep, setOnboardingStep] = useState(1);
 
-  // Étape questionnaire : Profil temporaire
   const [wizardData, setWizardData] = useState({
     name: 'Alexandre',
     targetRace: 'Maratrail du Ventoux',
@@ -60,8 +49,7 @@ export default function App() {
     level: 'Intermédiaire',
     vma: 15.0,
     fcMax: 185,
-    sessionsPerWeek: 4,
-    notes: ''
+    sessionsPerWeek: 4
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -69,14 +57,12 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Profil persistant
   const [profile, setProfile] = useState(() => {
     const saved = localStorage.getItem('trailfit_profile');
     if (saved) { try { return JSON.parse(saved); } catch (e) {} }
     return wizardData;
   });
 
-  // Stockage des semaines
   const [weeksData, setWeeksData] = useState(() => {
     const saved = localStorage.getItem('trailfit_weeks_data');
     if (saved) { try { return JSON.parse(saved); } catch (e) {} }
@@ -85,7 +71,6 @@ export default function App() {
 
   const [currentWeekNum, setCurrentWeekNum] = useState(1);
 
-  // Activités GPX
   const [importedActivities, setImportedActivities] = useState(() => {
     const saved = localStorage.getItem('trailfit_activities');
     if (saved) { try { return JSON.parse(saved); } catch (e) {} }
@@ -93,7 +78,6 @@ export default function App() {
   });
   const [selectedActivity, setSelectedActivity] = useState(null);
 
-  // Sauvegardes locales
   useEffect(() => {
     localStorage.setItem('trailfit_profile', JSON.stringify(profile));
   }, [profile]);
@@ -106,24 +90,34 @@ export default function App() {
     localStorage.setItem('trailfit_activities', JSON.stringify(importedActivities));
   }, [importedActivities]);
 
-  // Validation du questionnaire et génération des 3 premières semaines
+  // Validation de l'onboarding : Génération de la Semaine 1 d'abord
   const handleFinishOnboarding = async () => {
     setProfile(wizardData);
     setIsLoading(true);
     setErrorMsg('');
     try {
-      const newWeeks = {};
-      for (let w = 1; w <= 3; w++) {
-        const weekData = await generateTrailPlan(wizardData, w);
-        newWeeks[w] = weekData;
-      }
-      setWeeksData(newWeeks);
+      // 1. Générer d'abord la semaine 1
+      const week1Data = await generateTrailPlan(wizardData, 1);
+      const initialWeeks = { 1: week1Data };
+      
+      setWeeksData(initialWeeks);
       setCurrentWeekNum(1);
       localStorage.setItem('trailfit_onboarding_completed', 'true');
       setIsOnboarding(false);
       setActiveTab('dashboard');
+
+      // 2. Générer progressivement les semaines 2 et 3 en arrière-plan
+      try {
+        const week2Data = await generateTrailPlan(wizardData, 2);
+        setWeeksData(prev => ({ ...prev, 2: week2Data }));
+        const week3Data = await generateTrailPlan(wizardData, 3);
+        setWeeksData(prev => ({ ...prev, 3: week3Data }));
+      } catch (bgErr) {
+        console.log("Génération en arrière-plan reportée.");
+      }
+
     } catch (err) {
-      setErrorMsg(err.message || 'Erreur lors du calcul du programme.');
+      setErrorMsg(err.message || 'Erreur lors de la génération. Veuillez réessayer.');
     } finally {
       setIsLoading(false);
     }
@@ -141,7 +135,7 @@ export default function App() {
       setWeeksData(prev => ({ ...prev, [targetWeek]: weekData }));
       setCurrentWeekNum(targetWeek);
     } catch (err) {
-      setErrorMsg(err.message || 'Erreur lors de la génération de la semaine');
+      setErrorMsg(err.message || 'Erreur lors du chargement de la semaine');
     } finally {
       setIsLoading(false);
     }
@@ -170,7 +164,7 @@ export default function App() {
       elevation: Math.floor(Math.random() * (600 - 350) + 350),
       duration: '1h22',
       coherenceScore: Math.floor(Math.random() * (98 - 82) + 82),
-      coherenceFeedback: 'Très bonne régularité sur les blocs de montée. Intention de séance respectée.'
+      coherenceFeedback: 'Très bonne régularité sur les montées. Intention globale respectée.'
     };
 
     setImportedActivities(prev => [newActivity, ...prev]);
@@ -181,7 +175,6 @@ export default function App() {
     number: 1,
     totalWeeks: profile.weeksRemaining,
     phase: 'Foncier & Reprise',
-    focus: '',
     targetKm: 0,
     targetDPlus: 0,
     sessions: []
@@ -192,7 +185,6 @@ export default function App() {
     ? Math.round((completedCount / currentWeek.sessions.length) * 100) 
     : 0;
 
-  // Définition des classes conditionnelles pour le mode sombre
   const theme = {
     bg: darkMode ? 'bg-slate-950 text-slate-100' : 'bg-[#F8FAFC] text-slate-800',
     card: darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80',
@@ -207,15 +199,11 @@ export default function App() {
     border: darkMode ? 'border-slate-800' : 'border-slate-100'
   };
 
-  /* ------------------------------------------------------------- */
-  /* ECRAN : QUESTIONNAIRE DE BIENVENUE (ONBOARDING)               */
-  /* ------------------------------------------------------------- */
   if (isOnboarding) {
     return (
-      <div className={`min-h-screen ${theme.bg} font-sans flex flex-col justify-center items-center px-4 py-12 antialiased transition-colors duration-200`}>
-        <div className={`max-w-xl w-full ${theme.card} border rounded-3xl p-8 sm:p-10 shadow-xl space-y-8 relative overflow-hidden`}>
+      <div className={`min-h-screen ${theme.bg} font-sans flex flex-col justify-center items-center px-4 py-12 antialiased`}>
+        <div className={`max-w-xl w-full ${theme.card} border rounded-3xl p-8 sm:p-10 shadow-xl space-y-8 relative`}>
           
-          {/* Header de marque */}
           <div className={`flex items-center justify-between border-b ${theme.border} pb-6`}>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-400 rounded-xl flex items-center justify-center font-black text-slate-900 shadow-sm">
@@ -229,7 +217,6 @@ export default function App() {
               <button 
                 onClick={() => setDarkMode(!darkMode)}
                 className={`p-2 rounded-xl border ${theme.border} ${theme.navBtnInactive}`}
-                title="Changer le thème"
               >
                 {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
               </button>
@@ -245,13 +232,12 @@ export default function App() {
             </div>
           )}
 
-          {/* ÉTAPE 1 : PROFIL ATHLÈTE */}
           {onboardingStep === 1 && (
             <div className="space-y-6">
               <div>
                 <h2 className={`text-2xl font-black ${theme.titleText} tracking-tight`}>Faisons connaissance</h2>
                 <p className={`text-xs font-medium ${theme.subText} mt-1`}>
-                  Définissons vos capacités actuelles pour ajuster l'intensité de vos entraînements.
+                  Définissons vos capacités actuelles pour ajuster l'intensité.
                 </p>
               </div>
 
@@ -266,7 +252,6 @@ export default function App() {
                   />
                 </div>
 
-                {/* Curseur VMA */}
                 <div className={`space-y-2 ${theme.cardHeader} p-4 rounded-2xl border`}>
                   <div className="flex justify-between items-center">
                     <label className="uppercase tracking-wider">Vitesse Maximale Aérobie (VMA)</label>
@@ -283,16 +268,10 @@ export default function App() {
                     onChange={e => setWizardData({...wizardData, vma: Number(e.target.value)})}
                     className="w-full accent-amber-400 cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
-                    <span>10 km/h (Débutant)</span>
-                    <span>16 km/h (Régulier)</span>
-                    <span>22 km/h (Élite)</span>
-                  </div>
                 </div>
 
-                {/* Niveau d'expérience */}
                 <div>
-                  <label className="block uppercase tracking-wider mb-2">Niveau d'expérience en Trail</label>
+                  <label className="block uppercase tracking-wider mb-2">Niveau d'expérience</label>
                   <div className="grid grid-cols-3 gap-3">
                     {['Débutant', 'Intermédiaire', 'Avancé'].map((lvl) => (
                       <button
@@ -302,7 +281,7 @@ export default function App() {
                         className={`p-3 rounded-xl border text-center transition-all text-xs font-bold ${
                           wizardData.level === lvl 
                             ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm' 
-                            : `${theme.inputBg} hover:border-slate-400`
+                            : `${theme.inputBg}`
                         }`}
                       >
                         {lvl}
@@ -322,7 +301,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ÉTAPE 2 : OBJECTIF DE COURSE */}
           {onboardingStep === 2 && (
             <div className="space-y-6">
               <div>
@@ -343,10 +321,9 @@ export default function App() {
                   />
                 </div>
 
-                {/* Curseur Distance */}
                 <div className={`space-y-2 ${theme.cardHeader} p-4 rounded-2xl border`}>
                   <div className="flex justify-between items-center">
-                    <label className="uppercase tracking-wider">Distance de la course</label>
+                    <label className="uppercase tracking-wider">Distance</label>
                     <span className={`text-sm font-black ${theme.titleText} ${theme.card} border px-2.5 py-0.5 rounded-lg`}>
                       {wizardData.targetDistance} km
                     </span>
@@ -360,14 +337,8 @@ export default function App() {
                     onChange={e => setWizardData({...wizardData, targetDistance: Number(e.target.value)})}
                     className="w-full accent-amber-400 cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
-                    <span>10 km (Court)</span>
-                    <span>42 km (Maratrail)</span>
-                    <span>160 km (Ultra)</span>
-                  </div>
                 </div>
 
-                {/* Curseur Dénivelé */}
                 <div className="space-y-2 bg-slate-900 p-4 rounded-2xl text-white border border-slate-800">
                   <div className="flex justify-between items-center">
                     <label className="uppercase tracking-wider text-slate-300">Dénivelé Positif (D+)</label>
@@ -384,11 +355,6 @@ export default function App() {
                     onChange={e => setWizardData({...wizardData, targetElevation: Number(e.target.value)})}
                     className="w-full accent-amber-400 cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
-                    <span>200m D+</span>
-                    <span>3000m D+</span>
-                    <span>10 000m D+</span>
-                  </div>
                 </div>
               </div>
 
@@ -410,18 +376,16 @@ export default function App() {
             </div>
           )}
 
-          {/* ÉTAPE 3 : DISPONIBILITÉS */}
           {onboardingStep === 3 && (
             <div className="space-y-6">
               <div>
                 <h2 className={`text-2xl font-black ${theme.titleText} tracking-tight`}>Rythme & Calendrier</h2>
                 <p className={`text-xs font-medium ${theme.subText} mt-1`}>
-                  Ajustons la charge selon votre emploi du temps hebdomadaire.
+                  Ajustons la charge selon votre calendrier.
                 </p>
               </div>
 
               <div className="space-y-5 text-xs font-bold">
-                {/* Curseur Semaines restantes */}
                 <div className={`space-y-2 ${theme.cardHeader} p-4 rounded-2xl border`}>
                   <div className="flex justify-between items-center">
                     <label className="uppercase tracking-wider">Durée de préparation</label>
@@ -438,14 +402,8 @@ export default function App() {
                     onChange={e => setWizardData({...wizardData, weeksRemaining: Number(e.target.value)})}
                     className="w-full accent-amber-400 cursor-pointer"
                   />
-                  <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
-                    <span>4 sem. (Express)</span>
-                    <span>12 sem. (Standard)</span>
-                    <span>24 sem. (Fondamental)</span>
-                  </div>
                 </div>
 
-                {/* Curseur Séances par semaine */}
                 <div className={`space-y-2 ${theme.cardHeader} p-4 rounded-2xl border`}>
                   <div className="flex justify-between items-center">
                     <label className="uppercase tracking-wider">Séances par semaine</label>
@@ -480,11 +438,11 @@ export default function App() {
                   {isLoading ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Génération des 3 premières semaines...</span>
+                      <span>Création de votre programme...</span>
                     </>
                   ) : (
                     <>
-                      <span>Finaliser & Générer mon programme</span>
+                      <span>Générer mon programme</span>
                       <Sparkles className="w-4 h-4" />
                     </>
                   )}
@@ -498,12 +456,8 @@ export default function App() {
     );
   }
 
-  /* ------------------------------------------------------------- */
-  /* APPLICATION PRINCIPALE                                         */
-  /* ------------------------------------------------------------- */
   return (
     <div className={`min-h-screen ${theme.bg} font-sans flex flex-col antialiased transition-colors duration-200`}>
-      {/* Top Header */}
       <header className={`${theme.header} border-b sticky top-0 z-50`}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -514,7 +468,7 @@ export default function App() {
               <span className={`text-xl font-extrabold tracking-tight ${theme.titleText}`}>
                 TRAIL<span className="text-amber-500">COACH</span>
               </span>
-              <span className={`bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider`}>
+              <span className="bg-amber-500/10 text-amber-500 border border-amber-500/20 text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider">
                 BETA
               </span>
             </div>
@@ -558,8 +512,6 @@ export default function App() {
       </header>
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-8">
-        
-        {/* ONGLET 1 : MON PROGRAMME */}
         {activeTab === 'dashboard' && (
           <div className="space-y-8">
             <div className={`${theme.card} border rounded-2xl p-6 sm:p-8 shadow-sm`}>
@@ -620,7 +572,7 @@ export default function App() {
                     <ChevronLeft className="w-5 h-5" />
                   </button>
                   <span className={`text-xs font-black uppercase ${theme.titleText} px-3`}>
-                    {isLoading ? 'Calcul...' : `Semaine ${currentWeekNum}`}
+                    {isLoading ? 'Chargement...' : `Semaine ${currentWeekNum}`}
                   </span>
                   <button
                     disabled={currentWeekNum >= profile.weeksRemaining || isLoading}
@@ -640,9 +592,6 @@ export default function App() {
                     <Calendar className="w-5 h-5 text-amber-500" />
                     Séances de la Semaine {currentWeekNum}
                   </h2>
-                  <span className={`text-xs font-semibold ${theme.subText}`}>
-                    Phase : <strong className={theme.titleText}>{currentWeek.phase}</strong>
-                  </span>
                 </div>
 
                 <div className="space-y-4">
@@ -686,13 +635,12 @@ export default function App() {
           </div>
         )}
 
-        {/* ONGLET 2 : MES SÉANCES & GPX */}
         {activeTab === 'sessions' && (
           <div className="space-y-8">
             <div className={`${theme.card} border rounded-2xl p-6 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6`}>
               <div>
                 <h2 className={`text-xl font-black ${theme.titleText}`}>Analyse d'activités GPX</h2>
-                <p className={`text-xs ${theme.subText} mt-1`}>Importez vos fichiers `.gpx` enregistrés avec votre montre pour analyser votre courbe de charge et vérifier la cohérence.</p>
+                <p className={`text-xs ${theme.subText} mt-1`}>Importez vos fichiers `.gpx` pour vérifier la conformité de vos sorties.</p>
               </div>
               <label className="bg-amber-400 hover:bg-amber-500 text-slate-950 font-black px-5 py-3 rounded-xl text-xs uppercase tracking-wider cursor-pointer transition-all flex items-center gap-2 shadow-sm">
                 <Upload className="w-4 h-4" />
@@ -703,7 +651,7 @@ export default function App() {
 
             {importedActivities.length === 0 ? (
               <div className={`${theme.card} border rounded-2xl p-12 text-center text-slate-400 text-xs`}>
-                Aucune activité importée pour le moment. Cliquez sur "Importer un GPX" ci-dessus pour charger votre premier fichier.
+                Aucune activité importée pour le moment.
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -738,7 +686,7 @@ export default function App() {
                       <div className={`flex justify-between items-center border-b ${theme.border} pb-4`}>
                         <div>
                           <h3 className={`text-lg font-black ${theme.titleText}`}>{selectedActivity.fileName}</h3>
-                          <span className={`text-xs ${theme.subText}`}>Analyse détaillée du tracé & de l'effort</span>
+                          <span className={`text-xs ${theme.subText}`}>Analyse détaillée du tracé</span>
                         </div>
                         <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-black px-3 py-1.5 rounded-xl">
                           Score de cohérence : {selectedActivity.coherenceScore}%
@@ -759,14 +707,6 @@ export default function App() {
                             </div>
                           ))}
                         </div>
-
-                        <div className="flex justify-between text-[10px] text-slate-500 font-mono pt-2 border-t border-slate-800">
-                          <span>0 km</span>
-                          <span>4 km</span>
-                          <span>8 km</span>
-                          <span>12 km</span>
-                          <span>{selectedActivity.distance} km</span>
-                        </div>
                       </div>
 
                       <div className={`${theme.cardHeader} border p-4 rounded-xl text-xs space-y-1`}>
@@ -775,7 +715,7 @@ export default function App() {
                       </div>
                     </>
                   ) : (
-                    <div className="text-center py-12 text-slate-400 text-xs">Sélectionnez une activité dans la liste pour afficher l'analyse.</div>
+                    <div className="text-center py-12 text-slate-400 text-xs">Sélectionnez une activité dans la liste.</div>
                   )}
                 </div>
               </div>
@@ -783,12 +723,11 @@ export default function App() {
           </div>
         )}
 
-        {/* ONGLET 3 : PROFIL */}
         {activeTab === 'profile' && (
           <div className={`max-w-2xl mx-auto ${theme.card} border rounded-2xl p-8 shadow-sm space-y-6`}>
             <div className={`border-b ${theme.border} pb-4`}>
               <h2 className={`text-xl font-black ${theme.titleText}`}>Profil du Coureur</h2>
-              <p className={`text-xs ${theme.subText}`}>Ces données sont directement utilisées pour calibrer la charge et la difficulté des séances.</p>
+              <p className={`text-xs ${theme.subText}`}>Vos réglages personnels d'entraînement.</p>
             </div>
 
             <form onSubmit={(e) => { e.preventDefault(); setIsOnboarding(true); setOnboardingStep(1); }} className="space-y-4 text-xs font-bold">
@@ -807,17 +746,6 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block mb-1">VMA (km/h)</label>
-                  <input type="number" step="0.5" value={profile.vma} onChange={e => setProfile({...profile, vma: Number(e.target.value)})} className={`w-full ${theme.inputBg} rounded-xl p-3`} />
-                </div>
-                <div>
-                  <label className="block mb-1">FC Max (BPM)</label>
-                  <input type="number" value={profile.fcMax} onChange={e => setProfile({...profile, fcMax: Number(e.target.value)})} className={`w-full ${theme.inputBg} rounded-xl p-3`} />
-                </div>
-              </div>
-
               <button type="button" onClick={() => { setIsOnboarding(true); setOnboardingStep(1); }} className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-black p-4 rounded-xl uppercase tracking-wider text-xs transition-all shadow-md mt-4">
                 Relancer le Questionnaire de Configuration
               </button>
@@ -825,23 +753,20 @@ export default function App() {
           </div>
         )}
 
-        {/* ONGLET 4 : RÉGLAGES / PARAMÈTRES */}
         {activeTab === 'settings' && (
           <div className={`max-w-xl mx-auto ${theme.card} border rounded-2xl p-8 shadow-sm space-y-6`}>
             <div className={`border-b ${theme.border} pb-4`}>
               <h2 className={`text-xl font-black ${theme.titleText}`}>Réglages & Paramètres</h2>
-              <p className={`text-xs ${theme.subText}`}>Configuration technique et préférences d'affichage.</p>
+              <p className={`text-xs ${theme.subText}`}>Gestion du thème et des données.</p>
             </div>
 
             <div className="space-y-6 text-xs font-bold">
-              
-              {/* Option Mode Sombre */}
               <div className="flex items-center justify-between p-4 rounded-xl border border-slate-700/50 bg-slate-800/30">
                 <div className="flex items-center gap-3">
                   {darkMode ? <Moon className="w-5 h-5 text-amber-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
                   <div>
                     <div className={`text-sm font-black ${theme.titleText}`}>Mode Sombre</div>
-                    <div className={`text-[11px] ${theme.subText}`}>Ajuste les couleurs pour le confort visuel de nuit.</div>
+                    <div className={`text-[11px] ${theme.subText}`}>Confort visuel pour l'utilisation nocturne.</div>
                   </div>
                 </div>
 
@@ -872,7 +797,6 @@ export default function App() {
             </div>
           </div>
         )}
-
       </main>
     </div>
   );
