@@ -90,13 +90,20 @@ export default function App() {
     localStorage.setItem('trailfit_activities', JSON.stringify(importedActivities));
   }, [importedActivities]);
 
+  // Saut de l'onboarding pour entrer directement
+  const handleSkipOnboarding = () => {
+    setProfile(wizardData);
+    localStorage.setItem('trailfit_onboarding_completed', 'true');
+    setIsOnboarding(false);
+    setActiveTab('dashboard');
+  };
+
   // Validation de l'onboarding : Génération de la Semaine 1 d'abord
   const handleFinishOnboarding = async () => {
     setProfile(wizardData);
     setIsLoading(true);
     setErrorMsg('');
     try {
-      // 1. Générer d'abord la semaine 1
       const week1Data = await generateTrailPlan(wizardData, 1);
       const initialWeeks = { 1: week1Data };
       
@@ -106,7 +113,6 @@ export default function App() {
       setIsOnboarding(false);
       setActiveTab('dashboard');
 
-      // 2. Générer progressivement les semaines 2 et 3 en arrière-plan
       try {
         const week2Data = await generateTrailPlan(wizardData, 2);
         setWeeksData(prev => ({ ...prev, 2: week2Data }));
@@ -213,13 +219,22 @@ export default function App() {
                 TRAIL<span className="text-amber-500">COACH</span>
               </span>
             </div>
+
             <div className="flex items-center gap-3">
+              <button
+                onClick={handleSkipOnboarding}
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl border ${theme.border} ${theme.subText} hover:text-amber-500 transition-all`}
+              >
+                Passer
+              </button>
+
               <button 
                 onClick={() => setDarkMode(!darkMode)}
                 className={`p-2 rounded-xl border ${theme.border} ${theme.navBtnInactive}`}
               >
                 {darkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
               </button>
+
               <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
                 Étape {onboardingStep} / 3
               </span>
