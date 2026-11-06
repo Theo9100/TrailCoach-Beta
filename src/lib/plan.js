@@ -8,6 +8,7 @@
  *  - allures dérivées de la VMA, zones cardiaques dérivées de la FC max.
  */
 import { addDays, clamp, daysBetween, mondayOf, pace, roundTo, toISODate, weekdayIndex } from './format';
+import { buildWorkout } from './workout';
 
 export const LEVELS = ['Débutant', 'Intermédiaire', 'Avancé'];
 
@@ -198,6 +199,7 @@ function buildContent(type, ctx) {
     if (phase === 'foncier') {
       const n = reps(deb ? 8 : 10, deb ? 12 : 15);
       return {
+        n,
         title: 'VMA courte 30/30',
         zone: 'Z5',
         steps: [warmup, { label: 'Corps de séance', detail: `2 × ${n} × (30 s à ${p(deb ? 0.95 : 1)} /km – 30 s trot), 3 min de récupération entre les séries` }, cooldown],
@@ -206,6 +208,7 @@ function buildContent(type, ctx) {
     if (phase === 'developpement') {
       const n = reps(deb ? 4 : 5, deb ? 6 : 8);
       return {
+        n,
         title: 'VMA longue',
         zone: 'Z5',
         steps: [warmup, { label: 'Corps de séance', detail: `${n} × 3 min à ${p(0.93)} /km, récupération 1 min 30 en trottinant` }, cooldown],
@@ -215,13 +218,15 @@ function buildContent(type, ctx) {
       if (ultra) {
         const n = reps(2, 3);
         return {
-          title: 'Tempo allure course',
+          n,
+        title: 'Tempo allure course',
           zone: 'Z3',
           steps: [warmup, { label: 'Corps de séance', detail: `${n} × 15 min en allure active (${p(0.78)} /km), 3 min de récupération` }, cooldown],
         };
       }
       const n = reps(3, 5);
       return {
+        n,
         title: 'Travail au seuil',
         zone: 'Z4',
         steps: [warmup, { label: 'Corps de séance', detail: `${n} × 8 min au seuil (${p(0.86)} /km, FC ${hr(0.87, 0.92)}), récupération 2 min` }, cooldown],
@@ -238,6 +243,7 @@ function buildContent(type, ctx) {
     if (phase === 'foncier') {
       const n = reps(deb ? 6 : 8, deb ? 10 : 12);
       return {
+        n,
         title: 'Côtes courtes',
         zone: 'Z5',
         steps: [warmup, { label: 'Corps de séance', detail: `${n} × 45 s en côte (8–12 %) à effort vif, retour en descente au trot` }, { label: 'Renforcement', detail: '10 min : gainage et mollets' }],
@@ -246,6 +252,7 @@ function buildContent(type, ctx) {
     if (phase === 'developpement') {
       const n = reps(deb ? 4 : 5, deb ? 6 : 8);
       return {
+        n,
         title: 'Côtes longues',
         zone: 'Z4',
         steps: [warmup, { label: 'Corps de séance', detail: `${n} × 3 min de montée soutenue (FC ${hr(0.86, 0.92)}), redescente en trottinant` }, cooldown],
@@ -254,6 +261,7 @@ function buildContent(type, ctx) {
     if (phase === 'specifique') {
       const n = reps(3, 5);
       return {
+        n,
         title: 'D+ spécifique & descente',
         zone: 'Z3',
         steps: [
@@ -362,7 +370,10 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal') {
     if (adj.intensity > 0 && adj.intensity < 1 && (type === 'VMA' || type === 'COTES')) {
       content.steps = [...content.steps, { label: 'Ajustement', detail: 'Fatigue signalée : nombre de répétitions réduit, stoppez si les sensations sont mauvaises.' }];
     }
+    const workout = buildWorkout(type, meta.phase, content.n, durationMin, { level: profile.level, ultra });
+    delete content.n;
     return {
+      workout,
       id: `${meta.number}-${slot.day}`,
       dayIndex: slot.day,
       date: toISODate(addDays(meta.startDate, slot.day)),

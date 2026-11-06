@@ -2,8 +2,9 @@ import React, { useRef, useState } from 'react';
 import { Download, Laptop, Moon, Sun, Trash2, Upload } from 'lucide-react';
 import { Button, Card, SectionTitle, cx } from './ui';
 import { clearAll, exportAll, importAll } from '../lib/storage';
+import WatchCard from './WatchCard';
 
-export default function SettingsTab({ theme, setTheme, stats }) {
+export default function SettingsTab({ theme, setTheme, stats, intervals, setIntervals, onSendPlan }) {
   const fileRef = useRef(null);
   const [message, setMessage] = useState(null);
 
@@ -36,6 +37,8 @@ export default function SettingsTab({ theme, setTheme, stats }) {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <SectionTitle eyebrow="Préférences & données" title="Réglages" />
+
+      <WatchCard intervals={intervals} setIntervals={setIntervals} onSendPlan={onSendPlan} />
 
       <Card className="p-5 sm:p-6">
         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Apparence</h3>
@@ -84,7 +87,7 @@ export default function SettingsTab({ theme, setTheme, stats }) {
         </Button>
       </Card>
 
-      <p className="text-center text-xs text-muted">TrailCoach · programme calculé localement, sans IA ni serveur.</p>
+      <p className="text-center text-xs text-muted">TrailCoach · programme calculé localement, sans IA.</p>
     </div>
   );
 }

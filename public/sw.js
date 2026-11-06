@@ -1,5 +1,5 @@
 /* Service worker TrailCoach : l'app fonctionne hors connexion après la première visite. */
-const CACHE = 'trailcoach-v1';
+const CACHE = 'trailcoach-v2';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -20,6 +20,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   const isFont = url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
   if (url.origin !== location.origin && !isFont) return;
+  if (url.origin === location.origin && url.pathname.startsWith('/api/')) return; // jamais de cache pour l'API
 
   // Pages : réseau d'abord (nouvelle version dès qu'elle existe), cache en secours hors connexion.
   if (req.mode === 'navigate') {
