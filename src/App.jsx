@@ -5,9 +5,11 @@ import Dashboard from './components/Dashboard';
 import ActivitiesTab from './components/ActivitiesTab';
 import ProfileTab from './components/ProfileTab';
 import SettingsTab from './components/SettingsTab';
+import GeneratingScreen from './components/GeneratingScreen';
 import { Logo, cx } from './components/ui';
 import { currentWeekNumber, generatePlan } from './lib/plan';
 import { compareToSession } from './lib/gpx';
+import { fingerprint, pushSessions } from './lib/intervals';
 import { defaultProfile, migrateLegacyProfile, usePersistentState } from './lib/storage';
 
 const TABS = [
@@ -43,6 +45,9 @@ export default function App() {
   const [adjustments, setAdjustments] = usePersistentState('adjustments', {});
   const [activities, setActivities] = usePersistentState('activities', []);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [generating, setGenerating] = useState(null); // { profile, kind: 'create' | 'update' }
+  const [intervals, setIntervals] = usePersistentState('intervals', null); // { apiKey, athleteName }
+  const [intervalsSync, setIntervalsSync] = usePersistentState('intervalsSync', {}); // { [semaine]: { at, fp, count } }
 
   const plan = useMemo(() => (profile ? generatePlan(profile, adjustments) : []), [profile, adjustments]);
   const todayWeek = profile ? currentWeekNumber(profile) : 1;
@@ -55,10 +60,37 @@ export default function App() {
 
   /* ------------------------------ actions ------------------------------ */
 
-  const startProgram = (p) => {
+  const startProgram = (p) => setGenerating({ profile: p, kind: 'create' });
+  const updateProfile = (p) => setGenerating({ profile: p, kind: 'update' });
+
+  const finishGenerating = () => {
+    const { profile: p, kind } = generating;
+    setGenerating(null);
+    if (kind === 'update') { setProfile(p); return; }
+    applyProgram(p);
+  };
+
+  const sendWeek = async (week, onProgress) => {
+    const result = await pushSessions(intervals.apiKey, profile, week.sessions, onProgress);
+    setIntervalsSync((prev) => ({ ...prev, [week.number]: { at: Date.now(), fp: fingerprint(profile, week.sessions), count: result.sent } }));
+    return result;
+  };
+
+  const sendWholePlan = async (onProgress) => {
+    let total = 0;
+    const upcoming = plan.filter((w) => w.number >= todayWeek);
+    for (const w of upcoming) {
+      onProgress?.(`Semaine ${w.number} / ${plan.length}…`);
+      const r = await sendWeek(w);
+      total += r.sent;
+    }
+    return { sent: total };
+  };
+
+  const applyProgram = (p) => {
     const restarted = profile && p.planStart !== profile.planStart;
     setProfile(p);
-    if (restarted) { setCompletions({}); setAdjustments({}); }
+    if (restarted) { setCompletions({}); setAdjustments({}); setIntervalsSync({}); }
     setViewWeek(currentWeekNumber(p));
     setWizardOpen(false);
     setTab('dashboard');
@@ -106,6 +138,16 @@ export default function App() {
   };
 
   /* ------------------------------- rendu ------------------------------- */
+
+  if (generating) {
+    return (
+      <GeneratingScreen
+        profile={generating.profile}
+        title={generating.kind === 'update' ? 'Mise à jour du programme' : 'Création de votre programme'}
+        onDone={finishGenerating}
+      />
+    );
+  }
 
   if (!profile || wizardOpen) {
     return (
@@ -163,6 +205,10 @@ export default function App() {
             adjustments={adjustments}
             setAdjustment={(w, v) => setAdjustments((prev) => ({ ...prev, [w]: v }))}
             activitiesById={activitiesById}
+            intervals={intervals}
+            syncInfo={intervalsSync}
+            onSendWeek={sendWeek}
+            onConnectWatch={() => setTab('settings')}
           />
         )}
         {tab === 'sessions' && (
@@ -176,11 +222,14 @@ export default function App() {
             onLink={linkActivity}
           />
         )}
-        {tab === 'profile' && <ProfileTab profile={profile} onSave={setProfile} onRestartWizard={() => setWizardOpen(true)} />}
+        {tab === 'profile' && <ProfileTab profile={profile} onSave={updateProfile} onRestartWizard={() => setWizardOpen(true)} />}
         {tab === 'settings' && (
           <SettingsTab
             theme={theme}
             setTheme={setTheme}
+            intervals={intervals}
+            setIntervals={setIntervals}
+            onSendPlan={sendWholePlan}
             stats={{ activities: activities.length, completed: Object.values(completions).filter((c) => c.done).length }}
           />
         )}

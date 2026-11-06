@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Flag, Mountain, MoveRight, Route, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Flag, Loader2, Mountain, MoveRight, Route, Send, Sparkles, Watch } from 'lucide-react';
 import { Button, Card, ProgressBar, SectionTitle, Segmented, Stat, TypeChip, cx } from './ui';
 import { ADJUSTMENTS, PHASES, SESSION_TYPES } from '../lib/plan';
+import { fingerprint, sendableSessions } from '../lib/intervals';
+import { workoutToIntervalsText } from '../lib/workout';
 import { DAYS_SHORT, daysBetween, formatDuration, formatKm, formatLongDate, formatShortDate, toDate, toISODate } from '../lib/format';
 
-export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById }) {
+export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch }) {
   const week = plan[viewWeek - 1];
   const daysLeft = daysBetween(new Date(), profile.raceDate);
   const today = toISODate(new Date());
@@ -152,11 +154,22 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
                 completion={completions[s.id]}
                 activity={activitiesById[completions[s.id]?.activityId]}
                 onToggle={() => toggleCompletion(s.id)}
+                vma={profile.vma}
               />
             ))}
           </div>
 
           <aside className="space-y-4">
+            <WatchSync
+              key={week.number}
+              week={week}
+              profile={profile}
+              intervals={intervals}
+              sync={syncInfo?.[week.number]}
+              onSend={onSendWeek}
+              onConnect={onConnectWatch}
+            />
+
             <Card className="p-5">
               <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
                 <Sparkles className="h-3.5 w-3.5" style={{ color: week.phaseInfo.color }} /> Objectif de la phase
@@ -198,7 +211,7 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
   );
 }
 
-function SessionCard({ session, isToday, isPast, completion, activity, onToggle }) {
+function SessionCard({ session, isToday, isPast, completion, activity, onToggle, vma }) {
   const [open, setOpen] = useState(isToday);
   const info = SESSION_TYPES[session.type];
   const isDone = !!completion?.done;
@@ -242,6 +255,7 @@ function SessionCard({ session, isToday, isPast, completion, activity, onToggle 
                   <span className="leading-relaxed">{st.detail}</span>
                 </li>
               ))}
+              {session.workout?.length > 0 && <WatchText text={workoutToIntervalsText(session.workout, Number(vma) || 14)} />}
             </ol>
           )}
 
@@ -266,6 +280,82 @@ function SessionCard({ session, isToday, isPast, completion, activity, onToggle 
           </button>
         ) : null}
       </div>
+    </Card>
+  );
+}
+
+function WatchText({ text }) {
+  const [copied, setCopied] = useState(false);
+  const [show, setShow] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { setShow(true); }
+  };
+  return (
+    <li className="pt-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => setShow(!show)} className="inline-flex items-center gap-1.5 rounded-lg bg-sunken px-2.5 py-1.5 text-xs font-bold text-muted hover:text-ink">
+          <Watch className="h-3.5 w-3.5" /> {show ? 'Masquer la version montre' : 'Version montre'}
+        </button>
+        <button onClick={copy} className="inline-flex items-center gap-1.5 rounded-lg bg-sunken px-2.5 py-1.5 text-xs font-bold text-muted hover:text-ink">
+          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />} {copied ? 'Copié' : 'Copier (format Intervals.icu)'}
+        </button>
+      </div>
+      {show && <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg bg-sunken p-3 font-mono text-[11px] leading-relaxed">{text}</pre>}
+    </li>
+  );
+}
+
+function WatchSync({ week, profile, intervals, sync, onSend, onConnect }) {
+  const [state, setState] = useState({ status: 'idle' });
+  const count = sendableSessions(week.sessions).length;
+  const changed = sync && sync.fp !== fingerprint(profile, week.sessions);
+
+  const send = async () => {
+    setState({ status: 'loading', message: 'Connexion à Intervals.icu…' });
+    try {
+      const r = await onSend(week, (message) => setState({ status: 'loading', message }));
+      setState({ status: 'success', message: `${r.sent} séance${r.sent > 1 ? 's' : ''} envoyée${r.sent > 1 ? 's' : ''}. Synchronisez votre montre pour les récupérer.` });
+    } catch (e) {
+      setState({ status: 'error', message: e.message });
+    }
+  };
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
+        <Watch className="h-3.5 w-3.5 text-accent" /> Ma montre
+      </div>
+      {!intervals ? (
+        <>
+          <p className="mt-2 text-sm text-muted">Envoyez vos séances sur votre Suunto, Garmin ou Coros grâce à Intervals.icu.</p>
+          <Button variant="ghost" size="sm" className="mt-3" onClick={onConnect}>Connecter ma montre</Button>
+        </>
+      ) : count === 0 ? (
+        <p className="mt-2 text-sm text-muted">Aucune séance à venir à envoyer pour cette semaine.</p>
+      ) : (
+        <>
+          <p className="mt-2 text-sm text-muted">
+            {sync && !changed
+              ? `Semaine envoyée le ${new Date(sync.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}.`
+              : changed
+                ? 'La semaine a changé depuis le dernier envoi (ajustement ou profil). Renvoyez-la pour mettre la montre à jour.'
+                : `${count} séance${count > 1 ? 's' : ''} à venir prête${count > 1 ? 's' : ''} à envoyer.`}
+          </p>
+          <Button size="sm" className="mt-3 w-full" variant={sync && !changed ? 'ghost' : 'primary'} onClick={send} disabled={state.status === 'loading'}>
+            {state.status === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {sync ? 'Renvoyer la semaine' : 'Envoyer la semaine'}
+          </Button>
+          {state.status !== 'idle' && (
+            <p className={cx('mt-2 text-xs font-semibold', state.status === 'loading' && 'text-muted')} style={state.status === 'error' ? { color: 'var(--type-vma)' } : state.status === 'success' ? { color: 'var(--type-ef)' } : undefined}>
+              {state.message}
+            </p>
+          )}
+        </>
+      )}
     </Card>
   );
 }
