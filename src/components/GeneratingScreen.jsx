@@ -16,7 +16,7 @@ const TRAIL = 'M10 150 L60 120 L95 132 L140 70 L170 92 L205 40 L240 82 L270 66 L
 
 export default function GeneratingScreen({ profile, title = 'Création de votre programme', onDone }) {
   const reduced = useMemo(() => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, []);
-  const total = reduced ? 700 : 2600;
+  const total = reduced ? 700 : 5500;
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {

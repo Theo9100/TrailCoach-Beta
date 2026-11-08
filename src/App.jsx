@@ -9,7 +9,8 @@ import GeneratingScreen from './components/GeneratingScreen';
 import { Logo, cx } from './components/ui';
 import { currentWeekNumber, generatePlan } from './lib/plan';
 import { compareToSession } from './lib/gpx';
-import { fingerprint, pushSessions } from './lib/intervals';
+import { fetchActivities, fingerprint, pushSessions } from './lib/intervals';
+import { toISODate } from './lib/format';
 import { defaultProfile, migrateLegacyProfile, usePersistentState } from './lib/storage';
 
 const TABS = [
@@ -48,6 +49,9 @@ export default function App() {
   const [generating, setGenerating] = useState(null); // { profile, kind: 'create' | 'update' }
   const [intervals, setIntervals] = usePersistentState('intervals', null); // { apiKey, athleteName }
   const [intervalsSync, setIntervalsSync] = usePersistentState('intervalsSync', {}); // { [semaine]: { at, fp, count } }
+  const [activitySync, setActivitySync] = usePersistentState('activitySync', null); // { at, added }
+  const [icuIgnored, setIcuIgnored] = usePersistentState('icuIgnored', []); // sorties Intervals.icu supprimées par l'utilisateur
+  const [syncState, setSyncState] = useState({ status: 'idle' });
 
   const plan = useMemo(() => (profile ? generatePlan(profile, adjustments) : []), [profile, adjustments]);
   const todayWeek = profile ? currentWeekNumber(profile) : 1;
@@ -105,10 +109,16 @@ export default function App() {
     });
   };
 
+  /** Même sortie déjà présente (import GPX et Intervals.icu de la même course, par exemple). */
+  const isDuplicate = (a, list) => list.some((b) => b.id === a.id
+    || (b.startTime && a.startTime && b.startTime === a.startTime && b.distanceKm === a.distanceKm)
+    || (b.date === a.date && Math.abs(b.distanceKm - a.distanceKm) <= Math.max(0.3, a.distanceKm * 0.03)
+      && (!a.startTime || !b.startTime || Math.abs(a.startTime - b.startTime) < 3 * 3600e3)));
+
   const addActivities = (parsed, sessions) => {
-    const known = new Set(activities.map((a) => `${a.startTime}-${a.distanceKm}`));
-    const fresh = parsed.filter((a) => !known.has(`${a.startTime}-${a.distanceKm}`));
-    if (!fresh.length) return;
+    const fresh = [];
+    parsed.forEach((a) => { if (!isDuplicate(a, [...activities, ...fresh])) fresh.push(a); });
+    if (!fresh.length) return [];
     setActivities((prev) => [...fresh, ...prev].sort((a, b) => (b.startTime || 0) - (a.startTime || 0)));
     setCompletions((prev) => {
       const next = { ...prev };
@@ -121,7 +131,42 @@ export default function App() {
       });
       return next;
     });
+    return fresh;
   };
+
+  const allSessions = useMemo(() => plan.flatMap((w) => w.sessions), [plan]);
+
+  const syncActivities = async () => {
+    if (!intervals || !profile || syncState.status === 'loading') return;
+    setSyncState({ status: 'loading', message: 'Connexion à Intervals.icu…' });
+    try {
+      const skipIds = new Set([...icuIgnored.map(String), ...activities.filter((a) => a.icuId != null).map((a) => String(a.icuId))]);
+      const { activities: fetched, ignoredStrava } = await fetchActivities(intervals.apiKey, profile.planStart, toISODate(new Date()), {
+        skipIds,
+        onProgress: (message) => setSyncState({ status: 'loading', message }),
+      });
+      const addedList = addActivities(fetched, allSessions);
+      const added = addedList.length;
+      // Sorties déjà présentes (ex. importées en GPX) : on ne les retélécharge plus
+      const addedIds = new Set(addedList.map((a) => a.id));
+      const dupes = fetched.filter((a) => !addedIds.has(a.id)).map((a) => String(a.icuId));
+      if (dupes.length) setIcuIgnored((prev) => [...new Set([...prev, ...dupes])]);
+      setActivitySync({ at: Date.now(), added });
+      setSyncState({
+        status: 'success',
+        message: (added ? `${added} nouvelle${added > 1 ? 's' : ''} sortie${added > 1 ? 's' : ''} récupérée${added > 1 ? 's' : ''}.` : 'Tout est à jour.')
+          + (ignoredStrava ? ` ${ignoredStrava} sortie(s) venant de Strava ne sont pas accessibles par l'API d'Intervals.icu.` : ''),
+      });
+    } catch (e) {
+      setSyncState({ status: 'error', message: e.message });
+    }
+  };
+
+  // Synchronisation automatique à l'ouverture (au plus toutes les 15 minutes)
+  useEffect(() => {
+    if (intervals && profile && !generating && (!activitySync || Date.now() - activitySync.at > 15 * 60e3)) syncActivities();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [intervals?.apiKey, profile?.planStart]);
 
   const linkActivity = (activity, session, previousId) => {
     setCompletions((prev) => {
@@ -133,6 +178,8 @@ export default function App() {
   };
 
   const removeActivity = (id) => {
+    const act = activities.find((a) => a.id === id);
+    if (act?.icuId != null) setIcuIgnored((prev) => [...new Set([...prev, String(act.icuId)])]);
     setActivities((prev) => prev.filter((a) => a.id !== id));
     setCompletions((prev) => Object.fromEntries(Object.entries(prev).filter(([, c]) => c.activityId !== id)));
   };
@@ -208,6 +255,7 @@ export default function App() {
             intervals={intervals}
             syncInfo={intervalsSync}
             onSendWeek={sendWeek}
+            activities={activities}
             onConnectWatch={() => setTab('settings')}
           />
         )}
@@ -217,6 +265,11 @@ export default function App() {
             plan={plan}
             activities={activities}
             onAddActivities={addActivities}
+            intervals={intervals}
+            syncState={syncState}
+            lastSync={activitySync}
+            onSync={syncActivities}
+            onConnectWatch={() => setTab('settings')}
             onRemoveActivity={removeActivity}
             completions={completions}
             onLink={linkActivity}

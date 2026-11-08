@@ -2,16 +2,20 @@
  * Relais Vercel vers l'API Intervals.icu.
  * Évite les blocages CORS du navigateur. La clé API de l'utilisateur transite
  * dans l'en-tête Authorization et n'est jamais stockée ni journalisée ici.
- * Seuls les chemins de l'athlète courant (/api/v1/athlete/0/...) sont autorisés.
+ * Seuls les chemins de l'athlète courant (/api/v1/athlete/0/...) et les données détaillées
+ * d'une sortie (/api/v1/activity/{id}/streams) sont autorisés.
  */
-const ALLOWED = /^\/api\/v1\/athlete\/0(\/[A-Za-z0-9_\-/]*)?(\?[A-Za-z0-9_=&\-:.%]*)?$/;
+const ALLOWED = [
+  /^\/api\/v1\/athlete\/0(\/[A-Za-z0-9_\-/]*)?(\?[A-Za-z0-9_=&\-:.,%]*)?$/,
+  /^\/api\/v1\/activity\/[A-Za-z0-9_]+\/streams(\.json)?(\?[A-Za-z0-9_=&\-:.,%]*)?$/,
+];
 
 export default async function handler(req, res) {
   res.setHeader('X-TrailCoach-Proxy', '1');
   res.setHeader('Cache-Control', 'no-store');
 
   const path = String(req.query.p || '');
-  if (!ALLOWED.test(path) || path.includes('..')) {
+  if (!ALLOWED.some((re) => re.test(path)) || path.includes('..')) {
     res.status(400).json({ error: 'Chemin non autorisé' });
     return;
   }

@@ -1,12 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, FileUp, Info, Trash2, UploadCloud } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileUp, Info, Loader2, RefreshCw, Trash2, UploadCloud, Watch } from 'lucide-react';
 import { Button, Card, SectionTitle, Stat, TypeChip, cx, inputClass } from './ui';
 import ElevationChart from './ElevationChart';
 import { SESSION_TYPES } from '../lib/plan';
 import { compareToSession, parseGpx } from '../lib/gpx';
 import { daysBetween, formatDuration, formatKm, formatLongDate, formatShortDate, pace } from '../lib/format';
 
-export default function ActivitiesTab({ profile, plan, activities, onAddActivities, onRemoveActivity, completions, onLink }) {
+export default function ActivitiesTab({ profile, plan, activities, onAddActivities, onRemoveActivity, completions, onLink, intervals, syncState, lastSync, onSync, onConnectWatch }) {
   const [selectedId, setSelectedId] = useState(activities[0]?.id ?? null);
   const [errors, setErrors] = useState([]);
   const [dragging, setDragging] = useState(false);
@@ -47,7 +47,41 @@ export default function ActivitiesTab({ profile, plan, activities, onAddActiviti
 
   return (
     <div className="space-y-6">
-      <SectionTitle eyebrow="Analyse locale, aucune donnée envoyée" title="Mes séances & GPX" />
+      <SectionTitle eyebrow="Vos sorties et leur conformité au plan" title="Mes séances & GPX" />
+
+      {/* Synchronisation Intervals.icu */}
+      <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-4">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><Watch className="h-6 w-6" /></div>
+          {intervals ? (
+            <div>
+              <div className="font-extrabold">Sorties récupérées depuis Intervals.icu</div>
+              <div className="text-sm text-muted">
+                {syncState.status === 'loading'
+                  ? syncState.message
+                  : syncState.status !== 'idle'
+                    ? <span style={syncState.status === 'error' ? { color: 'var(--type-vma)' } : undefined}>{syncState.message}</span>
+                    : lastSync
+                      ? `Dernière synchronisation : ${new Date(lastSync.at).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+                      : 'Récupérez automatiquement les sorties de votre montre.'}
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="font-extrabold">Importez vos sorties automatiquement</div>
+              <div className="text-sm text-muted">Connectez Intervals.icu pour récupérer les sorties de votre montre, sans fichier à importer.</div>
+            </div>
+          )}
+        </div>
+        {intervals ? (
+          <Button variant="ghost" onClick={onSync} disabled={syncState.status === 'loading'}>
+            {syncState.status === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Synchroniser
+          </Button>
+        ) : (
+          <Button variant="ghost" onClick={onConnectWatch}>Connecter</Button>
+        )}
+      </Card>
 
       {/* Zone d'import */}
       <div
@@ -61,8 +95,8 @@ export default function ActivitiesTab({ profile, plan, activities, onAddActiviti
           <div className="flex items-center gap-4">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent"><UploadCloud className="h-6 w-6" /></div>
             <div>
-              <div className="font-extrabold">Glissez vos fichiers GPX ici</div>
-              <div className="text-sm text-muted">Exports Garmin, Suunto, Coros, Strava… Distance, D+, durée et FC sont lus directement dans le fichier.</div>
+              <div className="font-extrabold">{intervals ? 'Ou glissez un fichier GPX ici' : 'Glissez vos fichiers GPX ici'}</div>
+              <div className="text-sm text-muted">Exports Garmin, Suunto, Coros, Strava… Distance, D+, durée et FC sont lus directement dans le fichier, sans rien envoyer.</div>
             </div>
           </div>
           <Button onClick={() => inputRef.current?.click()}><FileUp className="h-4 w-4" /> Importer</Button>
@@ -79,7 +113,7 @@ export default function ActivitiesTab({ profile, plan, activities, onAddActiviti
         <Card className="p-10 text-center">
           <div className="font-display text-xl font-extrabold">Aucune activité pour l'instant</div>
           <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-            Importez une sortie : si elle correspond à une séance prévue le même jour, elle y est rattachée automatiquement et la séance est validée.
+            {intervals ? 'Synchronisez ou importez' : 'Importez'} une sortie : si elle correspond à une séance prévue le même jour, elle y est rattachée automatiquement et la séance est validée.
           </p>
         </Card>
       ) : (
@@ -109,7 +143,10 @@ export default function ActivitiesTab({ profile, plan, activities, onAddActiviti
                       <span className="text-accent">+{a.dplus} m</span>
                       {a.movingMin && <span>{formatDuration(a.movingMin)}</span>}
                     </div>
-                    {linked && <div className="mt-2"><TypeChip type={linked.type} info={SESSION_TYPES[linked.type]} /></div>}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {linked && <TypeChip type={linked.type} info={SESSION_TYPES[linked.type]} />}
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted">{a.source === 'intervals' ? 'Intervals.icu' : 'GPX'}</span>
+                    </div>
                   </button>
                 );
               })}
@@ -121,16 +158,21 @@ export default function ActivitiesTab({ profile, plan, activities, onAddActiviti
                   <div className="min-w-0">
                     <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">{formatLongDate(selected.date)}</div>
                     <h3 className="font-display truncate text-2xl font-black">{selected.name}</h3>
-                    <div className="text-xs text-muted">{selected.fileName}</div>
+                    <div className="text-xs text-muted">{selected.source === 'intervals' ? 'Récupérée depuis Intervals.icu' : selected.fileName}</div>
                   </div>
-                  <Button variant="danger" size="sm" onClick={() => { onRemoveActivity(selected.id); setSelectedId(null); }}>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    title={selected.source === 'intervals' ? 'Retire la sortie de TrailCoach (elle reste dans Intervals.icu et ne sera plus récupérée)' : undefined}
+                    onClick={() => { onRemoveActivity(selected.id); setSelectedId(null); }}
+                  >
                     <Trash2 className="h-4 w-4" /> Supprimer
                   </Button>
                 </div>
 
                 <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
                   <Stat label="Distance" value={formatKm(selected.distanceKm, 2)} unit="km" />
-                  <Stat label="D+ / D−" value={`${selected.dplus}`} unit={`/ ${selected.dminus} m`} accent />
+                  <Stat label="D+ / D−" value={`${selected.dplus}`} unit={selected.dminus != null ? `/ ${selected.dminus} m` : 'm'} accent />
                   <Stat label="Temps en mvt" value={formatDuration(selected.movingMin)} />
                   <Stat label="Allure moy." value={selected.movingMin ? pace(selected.distanceKm / (selected.movingMin / 60)) : '–'} unit="/km" />
                   {selected.avgHr && <Stat label="FC moy. / max" value={selected.avgHr} unit={`/ ${selected.maxHr} bpm`} />}
