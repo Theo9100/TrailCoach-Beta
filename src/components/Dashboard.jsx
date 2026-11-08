@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Flag, Loader2, Mountain, MoveRight, Route, Send, Sparkles, Watch } from 'lucide-react';
 import { Button, Card, ProgressBar, SectionTitle, Segmented, Stat, TypeChip, cx } from './ui';
 import { ADJUSTMENTS, PHASES, SESSION_TYPES } from '../lib/plan';
 import { fingerprint, sendableSessions } from '../lib/intervals';
 import { workoutToIntervalsText } from '../lib/workout';
+import { planAdherence, scoreColor, scoreLabel } from '../lib/score';
 import { DAYS_SHORT, daysBetween, formatDuration, formatKm, formatLongDate, formatShortDate, toDate, toISODate } from '../lib/format';
 
-export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch }) {
+export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch, activities = [] }) {
   const week = plan[viewWeek - 1];
   const daysLeft = daysBetween(new Date(), profile.raceDate);
   const today = toISODate(new Date());
@@ -99,6 +100,15 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
           </div>
         </div>
       </Card>
+
+      <AdherenceCard
+        plan={plan}
+        completions={completions}
+        activities={activities}
+        viewWeek={viewWeek}
+        todayWeek={todayWeek}
+        onSelectWeek={setViewWeek}
+      />
 
       {/* Semaine sélectionnée */}
       <section className="space-y-5">
@@ -356,6 +366,88 @@ function WatchSync({ week, profile, intervals, sync, onSend, onConnect }) {
           )}
         </>
       )}
+    </Card>
+  );
+}
+
+function Ring({ score, size = 96 }) {
+  const r = 38;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 92 92" className="h-full w-full -rotate-90">
+        <circle cx="46" cy="46" r={r} fill="none" stroke="rgb(var(--sunken))" strokeWidth="9" />
+        {score != null && <circle cx="46" cy="46" r={r} fill="none" stroke={scoreColor(score)} strokeWidth="9" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} style={{ transition: 'stroke-dashoffset .6s ease' }} />}
+      </svg>
+      <div className="absolute inset-0 grid place-items-center text-center">
+        <div className="font-display text-3xl font-black leading-none tabular">{score ?? '–'}</div>
+      </div>
+    </div>
+  );
+}
+
+function AdherenceCard({ plan, completions, activities, viewWeek, todayWeek, onSelectWeek }) {
+  const { global, weeks } = useMemo(() => planAdherence(plan, completions, activities), [plan, completions, activities]);
+  const parts = [
+    { key: 'regularity', label: 'Régularité', hint: global ? `${global.done} / ${global.past} séances réalisées` : '', weight: '50 %' },
+    { key: 'conformity', label: 'Conformité', hint: global?.conformity != null ? 'Écart moyen séance ↔ sortie' : 'Aucune sortie rattachée', weight: '30 %' },
+    { key: 'volume', label: 'Volume', hint: global ? `${Math.round(global.actualKm)} km courus / ${Math.round(global.plannedKm)} km prévus` : '', weight: '20 %' },
+  ];
+  const shown = weeks.filter((w) => w.number <= todayWeek);
+
+  return (
+    <Card className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)] lg:items-center">
+      <div className="flex items-center gap-4">
+        <Ring score={global?.score ?? null} />
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Suivi du plan</div>
+          <div className="font-display text-xl font-extrabold leading-tight">{scoreLabel(global?.score ?? null)}</div>
+          {global?.extra > 0 && <div className="mt-0.5 text-xs text-muted">{global.extra} sortie{global.extra > 1 ? 's' : ''} hors programme</div>}
+          {!global && <div className="mt-0.5 text-xs text-muted">Le score apparaît après vos premières séances.</div>}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {parts.map((p) => {
+          const v = global?.[p.key];
+          return (
+            <div key={p.key}>
+              <div className="flex items-baseline justify-between text-xs font-bold">
+                <span>{p.label} <span className="font-semibold text-muted">· {p.weight}</span></span>
+                <span className="tabular">{v != null ? `${Math.round(v * 100)} %` : '–'}</span>
+              </div>
+              <ProgressBar value={v != null ? v * 100 : 0} className="mt-1" color={scoreColor(v != null ? v * 100 : null)} />
+              {p.hint && <div className="mt-0.5 text-[11px] text-muted">{p.hint}</div>}
+            </div>
+          );
+        })}
+      </div>
+
+      <div>
+        <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Score par semaine</div>
+        <div className="mt-3 flex h-20 items-end gap-1.5">
+          {shown.map((w) => (
+            <button
+              key={w.number}
+              onClick={() => onSelectWeek(w.number)}
+              title={`Semaine ${w.number} : ${w.score ?? '–'}${w.score != null ? ' / 100' : ''}`}
+              className="flex h-full flex-1 flex-col items-center justify-end gap-1"
+            >
+              <span className="text-[10px] font-bold tabular text-muted">{w.score ?? '–'}</span>
+              <span
+                className="block w-full max-w-8 rounded-t-[3px]"
+                style={{
+                  height: `${Math.max(6, (w.score ?? 0) * 0.55)}%`,
+                  background: w.score != null ? scoreColor(w.score) : 'rgb(var(--line))',
+                  outline: w.number === viewWeek ? '2px solid rgb(var(--ink))' : 'none',
+                  outlineOffset: '2px',
+                }}
+              />
+              <span className="text-[10px] font-bold text-muted">S{w.number}</span>
+            </button>
+          ))}
+        </div>
+      </div>
     </Card>
   );
 }
