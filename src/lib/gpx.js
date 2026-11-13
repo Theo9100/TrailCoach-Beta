@@ -92,6 +92,7 @@ export function parseGpx(text, fileName = 'activite.gpx') {
   // Profil échantillonné (≈ 160 points) pour le graphique, léger à stocker
   const samples = 160;
   const profile = [];
+  const track = [];
   let j = 0;
   for (let k = 0; k <= samples; k += 1) {
     const target = (dist * k) / samples;
@@ -102,6 +103,7 @@ export function parseGpx(text, fileName = 'activite.gpx') {
       p.ele != null ? Math.round(p.ele) : null,
       p.hr ?? null,
     ]);
+    track.push([Math.round(p.lat * 1e5) / 1e5, Math.round(p.lon * 1e5) / 1e5]);
   }
 
   const name = childText(doc, 'name');
@@ -123,6 +125,7 @@ export function parseGpx(text, fileName = 'activite.gpx') {
     maxHr,
     hasElevation: Number.isFinite(minEle),
     profile,
+    track,
   };
 }
 

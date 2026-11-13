@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, FileUp, Info, Loader2, RefreshCw, Trash2, UploadCloud, Watch } from 'lucide-react';
 import { Button, Card, SectionTitle, Stat, TypeChip, cx, inputClass } from './ui';
 import ElevationChart from './ElevationChart';
+import TrackMap from './TrackMap';
 import { SESSION_TYPES } from '../lib/plan';
 import { compareToSession, parseGpx } from '../lib/gpx';
 import { daysBetween, formatDuration, formatKm, formatLongDate, formatShortDate, pace } from '../lib/format';
@@ -40,7 +41,7 @@ export default function ActivitiesTab({ profile, plan, activities, onAddActiviti
   const linkedSession = linkedSessionId ? sessionById[linkedSessionId] : null;
   const comparison = selected && linkedSession ? compareToSession(selected, linkedSession, profile) : null;
   const candidates = selected
-    ? sessions.filter((s) => Math.abs(daysBetween(selected.date, s.date)) <= 7).sort((a, b) => Math.abs(daysBetween(selected.date, a.date)) - Math.abs(daysBetween(selected.date, b.date)))
+    ? sessions.filter((s) => s.type !== 'RENFO' && Math.abs(daysBetween(selected.date, s.date)) <= 7).sort((a, b) => Math.abs(daysBetween(selected.date, a.date)) - Math.abs(daysBetween(selected.date, b.date)))
     : [];
 
   const totals = activities.reduce((acc, a) => ({ km: acc.km + a.distanceKm, dplus: acc.dplus + a.dplus, min: acc.min + (a.movingMin || 0) }), { km: 0, dplus: 0, min: 0 });
@@ -186,6 +187,8 @@ export default function ActivitiesTab({ profile, plan, activities, onAddActiviti
                   </div>
                   <ElevationChart profile={selected.profile} />
                 </div>
+
+                {selected.track?.length > 1 && <TrackMap track={selected.track} height={240} />}
 
                 <div className="space-y-3 border-t border-line pt-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">

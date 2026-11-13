@@ -11,6 +11,8 @@ import { currentWeekNumber, generatePlan } from './lib/plan';
 import { compareToSession } from './lib/gpx';
 import { fetchActivities, fingerprint, pushSessions } from './lib/intervals';
 import { toISODate } from './lib/format';
+import { computeLoadMods, fatigueSignal } from './lib/adapt';
+import GlassTabBar from './components/GlassTabBar';
 import { defaultProfile, migrateLegacyProfile, usePersistentState } from './lib/storage';
 
 const TABS = [
@@ -53,8 +55,19 @@ export default function App() {
   const [icuIgnored, setIcuIgnored] = usePersistentState('icuIgnored', []); // sorties Intervals.icu supprimées par l'utilisateur
   const [syncState, setSyncState] = useState({ status: 'idle' });
 
-  const plan = useMemo(() => (profile ? generatePlan(profile, adjustments) : []), [profile, adjustments]);
+  const [moves, setMoves] = usePersistentState('moves', {}); // { [séance]: jour }
+  const [recalOff, setRecalOff] = usePersistentState('recalOff', {}); // semaines où le recalage est refusé
+  const [raceSettings, setRaceSettings] = usePersistentState('raceSettings', {});
+  const [gear, setGear] = usePersistentState('gear', { checked: {}, custom: [] });
+
   const todayWeek = profile ? currentWeekNumber(profile) : 1;
+  const plan = useMemo(() => {
+    if (!profile) return [];
+    const base = generatePlan(profile, adjustments, { moves });
+    const loadMods = computeLoadMods(base, completions, todayWeek, profile.createdAt || '', recalOff);
+    return Object.keys(loadMods).length ? generatePlan(profile, adjustments, { moves, loadMods }) : base;
+  }, [profile, adjustments, moves, completions, todayWeek, recalOff]);
+  const fatigue = useMemo(() => fatigueSignal(plan, completions), [plan, completions]);
   const [viewWeek, setViewWeek] = useState(todayWeek);
   useEffect(() => { if (viewWeek > plan.length && plan.length) setViewWeek(plan.length); }, [plan.length, viewWeek]);
 
@@ -94,7 +107,7 @@ export default function App() {
   const applyProgram = (p) => {
     const restarted = profile && p.planStart !== profile.planStart;
     setProfile(p);
-    if (restarted) { setCompletions({}); setAdjustments({}); setIntervalsSync({}); }
+    if (restarted) { setCompletions({}); setAdjustments({}); setIntervalsSync({}); setMoves({}); setRecalOff({}); }
     setViewWeek(currentWeekNumber(p));
     setWizardOpen(false);
     setTab('dashboard');
@@ -124,7 +137,7 @@ export default function App() {
       const next = { ...prev };
       fresh.forEach((a) => {
         const sameDay = sessions
-          .filter((s) => s.date === a.date && !next[s.id]?.activityId)
+          .filter((s) => s.date === a.date && s.type !== 'RENFO' && !next[s.id]?.activityId)
           .sort((x, y) => Math.abs(x.km - a.distanceKm) - Math.abs(y.km - a.distanceKm));
         const s = sameDay[0];
         if (s) next[s.id] = { done: true, activityId: a.id, score: compareToSession(a, s, profile)?.score, at: Date.now() };
@@ -210,8 +223,6 @@ export default function App() {
     );
   }
 
-  const tabIndex = Math.max(0, TABS.findIndex((t) => t.id === tab));
-
   return (
     <div className="min-h-screen pb-32 md:pb-12">
       <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
@@ -259,6 +270,16 @@ export default function App() {
             onSendWeek={sendWeek}
             activities={activities}
             onConnectWatch={() => setTab('settings')}
+            moves={moves}
+            onMove={(id, day) => setMoves((prev) => { const next = { ...prev }; if (day == null) delete next[id]; else next[id] = day; return next; })}
+            onFeedback={(id, patch) => setCompletions((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev))}
+            raceSettings={raceSettings}
+            setRaceSettings={setRaceSettings}
+            gear={gear}
+            setGear={setGear}
+            onApplyVma={(vma) => updateProfile({ ...profile, vma })}
+            fatigue={fatigue}
+            onDismissRecal={(w) => setRecalOff((prev) => ({ ...prev, [w]: true, [w + 1]: true }))}
           />
         )}
         {tab === 'sessions' && (
@@ -290,34 +311,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Barre d'onglets mobile, flottante, effet verre */}
-      <nav
-        className="fixed inset-x-0 bottom-0 z-40 px-4 md:hidden"
-        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
-        aria-label="Navigation principale"
-      >
-        <div className="glass relative mx-auto grid max-w-md grid-cols-4 rounded-[1.75rem] p-1.5">
-          <span
-            aria-hidden="true"
-            className="glass-pill pointer-events-none absolute bottom-1.5 left-1.5 top-1.5 rounded-[1.35rem] transition-transform duration-300 ease-[cubic-bezier(0.3,1.4,0.5,1)]"
-            style={{ width: 'calc((100% - 0.75rem) / 4)', transform: `translateX(${tabIndex * 100}%)` }}
-          />
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? 'page' : undefined}
-              className={cx(
-                'relative flex flex-col items-center gap-0.5 rounded-[1.35rem] py-2 text-[10px] font-bold transition-colors duration-200 active:scale-95',
-                tab === t.id ? 'text-accent' : 'text-ink/60',
-              )}
-            >
-              <t.icon className="h-[22px] w-[22px]" strokeWidth={tab === t.id ? 2.4 : 2} />
-              {t.short || t.label}
-            </button>
-          ))}
-        </div>
-      </nav>
+      <GlassTabBar tabs={TABS} active={tab} onChange={setTab} />
     </div>
   );
 }

@@ -127,7 +127,15 @@ function readStreams(raw) {
   const out = {};
   if (Array.isArray(raw)) raw.forEach((s) => { if (s?.type && Array.isArray(s.data)) out[s.type] = s.data; });
   else if (raw && typeof raw === 'object') Object.entries(raw).forEach(([k, v]) => { if (Array.isArray(v)) out[k] = v; else if (Array.isArray(v?.data)) out[k] = v.data; });
+  // Coordonnées : paires [lat, lon], ou deux tableaux (data = lat, data2 = lon)
+  let latlng = null;
+  const ll = Array.isArray(raw) ? raw.find((s) => s?.type === 'latlng') : null;
+  if (ll?.data?.length) {
+    if (Array.isArray(ll.data[0])) latlng = ll.data;
+    else if (Array.isArray(ll.data2) && ll.data2.length === ll.data.length) latlng = ll.data.map((lat, i) => [lat, ll.data2[i]]);
+  }
   return {
+    latlng,
     distance: out.distance || null,
     altitude: out.altitude || out.fixed_altitude || out.enhanced_altitude || null,
     heartrate: out.heartrate || out.heart_rate || null,
@@ -152,6 +160,17 @@ function sampleProfile(streams, totalKm) {
     profile.push([Math.round(target * 1000) / 1000, Number.isFinite(ele) ? Math.round(ele) : null, Number.isFinite(hr) && hr > 30 ? hr : null]);
   }
   return profile;
+}
+
+function sampleTrack(latlng) {
+  if (!latlng?.length) return [];
+  const step = Math.max(1, Math.floor(latlng.length / 160));
+  const out = [];
+  for (let i = 0; i < latlng.length; i += step) {
+    const [lat, lon] = latlng[i] || [];
+    if (Number.isFinite(lat) && Number.isFinite(lon)) out.push([Math.round(lat * 1e5) / 1e5, Math.round(lon * 1e5) / 1e5]);
+  }
+  return out;
 }
 
 function toActivity(a, streams) {
@@ -180,6 +199,7 @@ function toActivity(a, streams) {
     maxHr: num(a.max_heartrate, a.icu_hr_max) ? Math.round(num(a.max_heartrate, a.icu_hr_max)) : null,
     hasElevation: eles.length > 0,
     profile,
+    track: sampleTrack(streams?.latlng),
   };
 }
 
@@ -198,7 +218,7 @@ export async function fetchActivities(apiKey, oldest, newest, { skipIds = new Se
     onProgress?.(`Analyse des sorties (${i + 1}/${runs.length})…`);
     let streams = null;
     try {
-      streams = readStreams(await call(apiKey, `/api/v1/activity/${runs[i].id}/streams.json?types=distance,altitude,heartrate`));
+      streams = readStreams(await call(apiKey, `/api/v1/activity/${runs[i].id}/streams.json?types=distance,altitude,heartrate,latlng`));
     } catch {
       streams = null; // la sortie est gardée, sans profil
     }
