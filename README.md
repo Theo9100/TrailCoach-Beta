@@ -6,6 +6,10 @@ Application web de préparation trail : un programme d'entraînement sur mesure,
 
 - **Mon Programme** : plan complet jusqu'au jour J, découpé en 4 phases (Foncier → Développement → Spécifique → Affûtage) avec semaines d'assimilation. Chaque séance donne la distance, le D+, la durée estimée et les allures/FC cibles calculées depuis votre VMA et votre FC max. Ajustement de charge selon la forme (en forme / fatigué / épuisé).
 - **Mes Séances & GPX** : récupération automatique des sorties depuis Intervals.icu, ou import de fichiers GPX (distance, D+/D−, temps en mouvement, allure, FC, profil d'altitude). L'activité est rattachée automatiquement à la séance du même jour, avec un score de conformité.
+- **Adaptation** : recalage automatique après une semaine peu suivie, séances déplaçables, courses de préparation, week-ends choc (ultras), ressenti après séance.
+- **Renforcement** : une séance hebdomadaire avec exercices animés.
+- **Jour J** : temps de passage par section, plan de nutrition, liste de matériel, tracé du parcours.
+- **Suivi** : score de suivi, courbe de charge réalisé / prévu, estimation de VMA.
 - **Tracé de la course** : import facultatif du GPX du parcours dans le questionnaire ou le profil (distance et D+ remplis automatiquement, profil et montées analysés).
 - **Profil** : modification du profil (le programme se recalcule) et zones d'entraînement personnalisées.
 - **Réglages** : connexion de la montre, thème clair/sombre/système, export et restauration des données, réinitialisation.

@@ -9,6 +9,7 @@
  */
 import { addDays, clamp, daysBetween, mondayOf, pace, roundTo, toISODate, weekdayIndex } from './format';
 import { buildWorkout } from './workout';
+import { strengthRoutine } from './exercises';
 
 export const LEVELS = ['Débutant', 'Intermédiaire', 'Avancé'];
 
@@ -25,6 +26,8 @@ export const SESSION_TYPES = {
   COTES: { label: 'Côtes', short: 'Côtes', color: 'var(--type-cotes)' },
   LONG: { label: 'Sortie longue', short: 'Longue', color: 'var(--type-long)' },
   RECUP: { label: 'Récupération', short: 'Récup', color: 'var(--type-recup)' },
+  RENFO: { label: 'Renforcement', short: 'Renfo', color: 'var(--type-renfo)' },
+  PREPA: { label: 'Course de préparation', short: 'Prépa', color: 'var(--accent)' },
   COURSE: { label: 'Jour J', short: 'Course', color: 'var(--accent)' },
 };
 
@@ -319,7 +322,7 @@ function resolveSlotType(code, weekNumber, level) {
   return code;
 }
 
-export function generateWeek(profile, weekNumber, adjustmentKey = 'normal') {
+export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts = {}) {
   const macro = buildMacroCycle(profile);
   const meta = macro[clamp(weekNumber, 1, macro.length) - 1];
   const adj = ADJUSTMENTS[adjustmentKey] || ADJUSTMENTS.normal;
@@ -346,8 +349,23 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal') {
     slots = slots.map((s) => ({ ...s, type: s.type === 'LONG' ? 'EF' : s.type === 'EF' ? 'EF' : 'RECUP' }));
   }
 
-  const weeklyKm = meta.plannedKm * adj.km;
-  const weeklyDPlus = meta.plannedDPlus * adj.dplus;
+  // Courses de préparation : mini-affûtage la semaine de la course, récupération la suivante
+  const weekEnd = toISODate(addDays(meta.startDate, 6));
+  const prevStart = toISODate(addDays(meta.startDate, -7));
+  const prepRaces = (profile.prepRaces || []).filter((r) => r.date && r.date < toISODate(profile.raceDate));
+  const prep = meta.isRaceWeek ? null : prepRaces.find((r) => r.date >= meta.startDate && r.date <= weekEnd) || null;
+  const afterPrep = meta.isRaceWeek ? null : prepRaces.find((r) => r.date >= prevStart && r.date < meta.startDate) || null;
+  const notes = [];
+  let extra = 1;
+  if (prep) { extra *= 0.8; notes.push({ kind: 'prep', text: `Course de préparation « ${prep.name} » cette semaine : charge réduite de 20 % et veille au repos.` }); }
+  if (afterPrep) { extra *= 0.85; notes.push({ kind: 'prep', text: `Récupération après « ${afterPrep.name} » : charge réduite de 15 %.` }); }
+  if (opts.loadFactor && opts.loadFactor < 1 && !meta.isRaceWeek) {
+    extra *= opts.loadFactor;
+    notes.push({ kind: 'recal', text: `Plan recalé : charge réduite de ${Math.round((1 - opts.loadFactor) * 100)} % pour reprendre progressivement après ${opts.loadReason || 'une semaine peu suivie'}.` });
+  }
+
+  const weeklyKm = meta.plannedKm * adj.km * extra;
+  const weeklyDPlus = meta.plannedDPlus * adj.dplus * extra;
   const kmWeightSum = slots.reduce((s, x) => s + KM_WEIGHTS[x.type], 0) || 1;
   const dpWeightSum = slots.reduce((s, x) => s + DPLUS_WEIGHTS[x.type], 0) || 1;
   const longCap = clamp(profile.distance * 0.65, 14, p.longCap);
@@ -389,6 +407,90 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal') {
     };
   });
 
+  // Week-end choc (ultras, phase spécifique) : deux sorties longues enchaînées
+  const long = sessions.find((x) => x.type === 'LONG');
+  if (ultra && long && meta.phase === 'specifique' && !meta.isRecovery && !prep && !afterPrep && adj.intensity === 1 && count >= 4) {
+    const first = sessions.filter((x) => x.dayIndex < long.dayIndex && x.type !== 'LONG').sort((a, b) => b.dayIndex - a.dayIndex)[0];
+    if (first && !sessions.some((x) => x !== first && x.dayIndex === long.dayIndex - 1)) {
+      first.dayIndex = long.dayIndex - 1;
+      first.date = toISODate(addDays(meta.startDate, first.dayIndex));
+      first.type = 'LONG';
+      first.km = roundTo(long.km * 0.6, 0.5);
+      first.dplus = roundTo(long.dplus * 0.6, 10);
+      first.durationMin = roundTo(((first.km + first.dplus / 100) / (vma * SPEED_FACTOR.LONG)) * 60, 5);
+      first.title = 'Week-end choc · jour 1';
+      first.zone = 'Z2';
+      first.steps = [
+        { label: 'Corps de séance', detail: 'Sortie vallonnée en endurance, sans chercher la vitesse : garder des forces pour demain' },
+        { label: 'Récupération', detail: 'Bien manger et s’hydrater dans l’heure qui suit, se coucher tôt' },
+      ];
+      first.workout = buildWorkout('LONG', meta.phase, null, first.durationMin, { level: profile.level, ultra });
+      long.title = 'Week-end choc · jour 2';
+      long.steps = [{ label: 'Objectif', detail: 'Courir sur la fatigue de la veille, comme en fin d’ultra : rythme régulier, alimentation de course' }, ...long.steps];
+      notes.push({ kind: 'choc', text: 'Week-end choc : deux sorties longues enchaînées pour habituer le corps à courir fatigué.' });
+    }
+  }
+
+  // Course de préparation : remplace la sortie longue
+  if (prep) {
+    const prepDay = weekdayIndex(prep.date);
+    for (let i = sessions.length - 1; i >= 0; i -= 1) {
+      const x = sessions[i];
+      if (x.type === 'LONG' || x.dayIndex === prepDay || x.dayIndex === prepDay - 1) sessions.splice(i, 1);
+    }
+    const km = Number(prep.distance) || 20;
+    const dplus = Number(prep.elevation) || 0;
+    sessions.push({
+      id: `${meta.number}-prep`,
+      dayIndex: prepDay,
+      date: prep.date,
+      type: 'PREPA',
+      km,
+      dplus,
+      durationMin: roundTo(((km + dplus / 100) / (vma * 0.62)) * 60, 5),
+      title: prep.name || 'Course de préparation',
+      zone: 'Course',
+      steps: [
+        { label: 'Objectif', detail: 'Tester le matériel, l’alimentation et le rythme de course. Ce n’est pas l’objectif principal : rester en contrôle.' },
+        { label: 'Après', detail: 'Deux jours très faciles, puis reprise progressive' },
+      ],
+    });
+  }
+
+  // Séance de renforcement dédiée
+  if (profile.strength !== false && !meta.isRaceWeek && adj.intensity !== 0) {
+    const used = new Set(sessions.map((x) => x.dayIndex));
+    const hard = new Set(sessions.filter((x) => ['LONG', 'PREPA'].includes(x.type)).map((x) => x.dayIndex - 1));
+    let day = [0, 1, 2, 3, 4, 5, 6].find((d) => !used.has(d) && !hard.has(d));
+    if (day == null) day = (sessions.find((x) => x.type === 'EF' || x.type === 'RECUP') || sessions[0]).dayIndex;
+    const routine = strengthRoutine(meta.phase, profile.level, meta.isRecovery || adj.intensity < 1);
+    sessions.push({
+      id: `${meta.number}-renfo`,
+      dayIndex: day,
+      date: toISODate(addDays(meta.startDate, day)),
+      type: 'RENFO',
+      km: 0,
+      dplus: 0,
+      durationMin: meta.phase === 'affutage' ? 15 : 25,
+      title: routine.title,
+      zone: 'Sans impact',
+      exercises: routine.items,
+      steps: [{ label: 'Déroulé', detail: 'Enchaîner les exercices avec 45 s de récupération entre les séries. Privilégier la qualité du geste à la vitesse.' }],
+    });
+  }
+
+  // Séances déplacées par l'utilisateur
+  const moves = opts.moves || {};
+  sessions.forEach((x) => {
+    const d = moves[x.id];
+    if (Number.isInteger(d) && d >= 0 && d <= 6 && !['COURSE', 'PREPA'].includes(x.type) && d !== x.dayIndex) {
+      x.plannedDay = x.dayIndex;
+      x.dayIndex = d;
+      x.date = toISODate(addDays(meta.startDate, d));
+      x.moved = true;
+    }
+  });
+
   if (meta.isRaceWeek) {
     const raceSpeed = vma * (ultra ? 0.5 : 0.6);
     sessions.push({
@@ -411,11 +513,12 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal') {
 
   sessions.sort((a, b) => a.dayIndex - b.dayIndex);
 
-  const training = sessions.filter((s) => s.type !== 'COURSE');
+  const training = sessions.filter((s) => s.type !== 'COURSE' && s.type !== 'PREPA');
   return {
     ...meta,
     phaseInfo: PHASES[meta.phase],
     adjustment: adjustmentKey,
+    notes,
     targetKm: Math.round(training.reduce((s, x) => s + x.km, 0)),
     targetDPlus: roundTo(training.reduce((s, x) => s + x.dplus, 0), 10),
     targetMinutes: training.reduce((s, x) => s + x.durationMin, 0),
@@ -424,8 +527,12 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal') {
 }
 
 /** Toutes les semaines (pour la vue d'ensemble). */
-export function generatePlan(profile, adjustments = {}) {
-  return buildMacroCycle(profile).map((w) => generateWeek(profile, w.number, adjustments[w.number]));
+export function generatePlan(profile, adjustments = {}, opts = {}) {
+  return buildMacroCycle(profile).map((w) => generateWeek(profile, w.number, adjustments[w.number], {
+    moves: opts.moves,
+    loadFactor: opts.loadMods?.[w.number]?.factor,
+    loadReason: opts.loadMods?.[w.number]?.reason,
+  }));
 }
 
 /** Estimation de VMA à partir d'un temps sur 10 km (≈ 90 % de VMA). */

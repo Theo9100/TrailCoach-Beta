@@ -48,6 +48,7 @@ export function readRaceTrack(text, fileName) {
     minEle: a.minEle,
     maxEle: a.maxEle,
     profile,
+    track: a.track,
     climbs,
     longestClimb: longest,
   };

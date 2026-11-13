@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { RotateCcw, Save } from 'lucide-react';
+import { Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { Button, Card, Field, RangeField, SectionTitle, Segmented, cx, inputClass } from './ui';
 import { LEVELS, peakTargets, totalWeeksFor, trainingZones } from '../lib/plan';
 import { addDays, daysBetween, pace, toISODate } from '../lib/format';
@@ -78,6 +78,36 @@ export default function ProfileTab({ profile, onSave, onRestartWizard }) {
                 <Segmented options={[{ value: 5, label: 'Samedi' }, { value: 6, label: 'Dimanche' }]} value={Number(draft.longRunDay)} onChange={(v) => set({ longRunDay: v })} />
               </div>
             </div>
+            <div>
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted">Séance de renforcement hebdomadaire</span>
+              <Segmented options={[{ value: true, label: 'Oui, avec exercices animés' }, { value: false, label: 'Non' }]} value={draft.strength !== false} onChange={(v) => set({ strength: v })} />
+            </div>
+          </Card>
+
+          <Card className="space-y-4 p-5 sm:p-6">
+            <div>
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Courses de préparation</h3>
+              <p className="mt-1 text-sm text-muted">Une course intermédiaire remplace la sortie longue de sa semaine, avec une charge allégée avant et une récupération après.</p>
+            </div>
+            {(draft.prepRaces || []).map((r, i) => {
+              const upd = (patch) => set({ prepRaces: draft.prepRaces.map((x, k) => (k === i ? { ...x, ...patch } : x)) });
+              return (
+                <div key={r.id} className="grid grid-cols-2 gap-3 rounded-xl border border-line bg-sunken/40 p-3 sm:grid-cols-[1.4fr_1fr_0.7fr_0.7fr_auto] sm:items-end">
+                  <Field label="Nom"><input className={inputClass} value={r.name} onChange={(e) => upd({ name: e.target.value })} /></Field>
+                  <Field label="Date"><input type="date" className={inputClass} min={toISODate(addDays(draft.planStart, 0))} max={toISODate(addDays(draft.raceDate, -8))} value={r.date} onChange={(e) => upd({ date: e.target.value })} /></Field>
+                  <Field label="Km"><input type="number" min="5" max="120" className={inputClass} value={r.distance} onChange={(e) => upd({ distance: Number(e.target.value) })} /></Field>
+                  <Field label="D+ (m)"><input type="number" min="0" max="8000" step="50" className={inputClass} value={r.elevation} onChange={(e) => upd({ elevation: Number(e.target.value) })} /></Field>
+                  <Button variant="ghost" size="sm" className="h-11" onClick={() => set({ prepRaces: draft.prepRaces.filter((_, k) => k !== i) })} aria-label="Supprimer cette course"><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              );
+            })}
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={() => set({ prepRaces: [...(draft.prepRaces || []), { id: `p${Date.now()}`, name: 'Course de préparation', date: toISODate(addDays(draft.raceDate, -35)), distance: Math.max(10, Math.round(draft.distance / 2)), elevation: Math.round(draft.elevation / 2 / 50) * 50 }] })}
+            >
+              <Plus className="h-4 w-4" /> Ajouter une course
+            </Button>
           </Card>
 
           <div className="glass sticky bottom-28 z-10 flex items-center gap-3 rounded-2xl p-3 md:bottom-4">

@@ -1,14 +1,20 @@
 import React, { useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Flag, Loader2, Mountain, MoveRight, Route, Send, Sparkles, Watch } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Flag, Loader2, Mountain, MoveRight, Route, Send, Sparkles, Watch } from 'lucide-react';
 import { Button, Card, ProgressBar, SectionTitle, Segmented, Stat, TypeChip, cx } from './ui';
 import { ADJUSTMENTS, PHASES, SESSION_TYPES } from '../lib/plan';
 import { fingerprint, sendableSessions } from '../lib/intervals';
 import { workoutToIntervalsText } from '../lib/workout';
 import { planAdherence, scoreColor, scoreLabel } from '../lib/score';
 import { CourseProfile, courseSummary } from './RaceGpxField';
+import ExerciseFigure from './ExerciseFigure';
+import RaceDay from './RaceDay';
+import { EXERCISES } from '../lib/exercises';
+import { estimateVma } from '../lib/adapt';
+import { addDays } from '../lib/format';
 import { DAYS_SHORT, daysBetween, formatDuration, formatKm, formatLongDate, formatShortDate, toDate, toISODate } from '../lib/format';
 
-export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch, activities = [] }) {
+export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch, activities = [], moves = {}, onMove, onFeedback, raceSettings, setRaceSettings, gear, setGear, onApplyVma, fatigue, onDismissRecal }) {
+  const [view, setView] = useState('plan');
   const week = plan[viewWeek - 1];
   const daysLeft = daysBetween(new Date(), profile.raceDate);
   const today = toISODate(new Date());
@@ -112,18 +118,46 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
         </div>
       </Card>
 
-      <AdherenceCard
-        plan={plan}
-        completions={completions}
-        activities={activities}
-        viewWeek={viewWeek}
-        todayWeek={todayWeek}
-        onSelectWeek={setViewWeek}
-        since={profile.createdAt || ''}
+      <Segmented
+        className="mx-auto max-w-md"
+        options={[{ value: 'plan', label: 'Entraînement' }, { value: 'race', label: 'Jour J' }, { value: 'stats', label: 'Suivi' }]}
+        value={view}
+        onChange={setView}
       />
 
+      {view === 'race' && <RaceDay profile={profile} settings={raceSettings} setSettings={setRaceSettings} gear={gear} setGear={setGear} />}
+
+      {view === 'stats' && (
+        <div className="rise space-y-6">
+          <AdherenceCard
+            plan={plan}
+            completions={completions}
+            activities={activities}
+            viewWeek={viewWeek}
+            todayWeek={todayWeek}
+            onSelectWeek={(n) => { setViewWeek(n); setView('plan'); }}
+            since={profile.createdAt || ''}
+          />
+          <LoadChart plan={plan} completions={completions} activities={activities} activitiesById={activitiesById} todayWeek={todayWeek} />
+          <VmaCard profile={profile} activities={activities} onApply={onApplyVma} />
+        </div>
+      )}
+
       {/* Semaine sélectionnée */}
-      <section className="space-y-5">
+      {view === 'plan' && (
+      <section className="rise space-y-5">
+        {week.notes?.map((n) => (
+          <div key={n.text} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm font-semibold">
+            <span className="flex items-start gap-2"><Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{n.text}</span>
+            {n.kind === 'recal' && <Button variant="ghost" size="sm" onClick={() => onDismissRecal(week.number)}>Garder la charge prévue</Button>}
+          </div>
+        ))}
+        {fatigue && viewWeek === todayWeek && (adjustments[week.number] || 'normal') === 'normal' && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-semibold" style={{ borderColor: 'var(--type-cotes)', background: 'color-mix(in srgb, var(--type-cotes) 8%, transparent)' }}>
+            <span>Vos dernières séances ont été éprouvantes{fatigue.avg ? ` (effort moyen ${String(fatigue.avg).replace('.', ',')} / 10)` : ''}. Alléger cette semaine ?</span>
+            <Button variant="ghost" size="sm" onClick={() => setAdjustment(week.number, 'fatigued')}>Passer en mode Fatigué</Button>
+          </div>
+        )}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <SectionTitle
             eyebrow={`${formatShortDate(week.startDate)} – ${formatShortDate(lastDay)}${viewWeek === todayWeek ? ' · semaine en cours' : ''}`}
@@ -177,6 +211,9 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
                 activity={activitiesById[completions[s.id]?.activityId]}
                 onToggle={() => toggleCompletion(s.id)}
                 vma={profile.vma}
+                weekStart={week.startDate}
+                onMove={(d) => onMove(s.id, d === (s.plannedDay ?? s.dayIndex) ? null : d)}
+                onFeedback={(patch) => onFeedback(s.id, patch)}
               />
             ))}
           </div>
@@ -229,12 +266,15 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
           </aside>
         </div>
       </section>
+      )}
     </div>
   );
 }
 
-function SessionCard({ session, isToday, isPast, completion, activity, onToggle, vma }) {
+function SessionCard({ session, isToday, isPast, completion, activity, onToggle, vma, weekStart, onMove, onFeedback }) {
   const [open, setOpen] = useState(isToday);
+  const [moving, setMoving] = useState(false);
+  const movable = !['COURSE', 'PREPA'].includes(session.type) && !completion?.done;
   const info = SESSION_TYPES[session.type];
   const isDone = !!completion?.done;
   const d = toDate(session.date);
@@ -257,7 +297,8 @@ function SessionCard({ session, isToday, isPast, completion, activity, onToggle,
           <h3 className={cx('mt-1.5 text-base font-extrabold leading-snug', isDone && 'line-through decoration-2 decoration-muted/50')}>{session.title}</h3>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-muted tabular">
             <span className="inline-flex items-center gap-1"><Clock className="h-3.5 w-3.5" />{formatDuration(session.durationMin)}</span>
-            <span className="inline-flex items-center gap-1"><Route className="h-3.5 w-3.5" />{formatKm(session.km)} km</span>
+            {session.km > 0 && <span className="inline-flex items-center gap-1"><Route className="h-3.5 w-3.5" />{formatKm(session.km)} km</span>}
+            {session.moved && <span className="rounded bg-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wider">Déplacée</span>}
             {session.dplus > 0 && <span className="inline-flex items-center gap-1" style={{ color: 'var(--accent)' }}><Mountain className="h-3.5 w-3.5" />{session.dplus} m</span>}
           </div>
 
@@ -267,6 +308,53 @@ function SessionCard({ session, isToday, isPast, completion, activity, onToggle,
               <span className="tabular">{formatKm(activity.distanceKm)} km · {activity.dplus} m</span>
               {completion?.score != null && <><MoveRight className="h-3 w-3 text-muted" /><span style={{ color: 'var(--type-ef)' }}>{completion.score} % conforme</span></>}
             </div>
+          )}
+
+          {isDone && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-sunken/70 p-2.5">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-muted">Effort</span>
+                <div className="flex gap-0.5" role="group" aria-label="Effort ressenti de 1 à 10">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => onFeedback({ rpe: completion?.rpe === n ? null : n })}
+                      aria-pressed={completion?.rpe === n}
+                      className={cx('h-6 w-6 rounded-md text-[11px] font-bold tabular transition', completion?.rpe >= n ? 'text-white' : 'bg-surface text-muted hover:text-ink')}
+                      style={completion?.rpe >= n ? { background: n >= 8 ? 'var(--type-vma)' : n >= 5 ? 'var(--type-cotes)' : 'var(--type-ef)' } : undefined}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                {[['fresh', 'En forme'], ['ok', 'Correct'], ['tired', 'Fatigué']].map(([k, label]) => (
+                  <button
+                    key={k}
+                    onClick={() => onFeedback({ feel: completion?.feel === k ? null : k })}
+                    aria-pressed={completion?.feel === k}
+                    className={cx('rounded-md px-2 py-1 text-[11px] font-bold transition', completion?.feel === k ? 'bg-ink text-bg' : 'bg-surface text-muted hover:text-ink')}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {open && session.exercises && (
+            <ul className="rise mt-4 space-y-3 border-t border-line pt-3">
+              {session.exercises.map((e) => (
+                <li key={e.id} className="flex items-center gap-3">
+                  <ExerciseFigure id={e.id} size={104} />
+                  <div className="min-w-0">
+                    <div className="text-sm font-extrabold">{EXERCISES[e.id].name} <span className="ml-1 font-bold tabular" style={{ color: 'var(--type-renfo)' }}>{e.dose}</span></div>
+                    <div className="text-xs leading-relaxed text-muted">{EXERCISES[e.id].cue}</div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
 
           {open && (
@@ -285,6 +373,24 @@ function SessionCard({ session, isToday, isPast, completion, activity, onToggle,
             {open ? 'Masquer le détail' : 'Voir le détail'}
             <ChevronDown className={cx('h-3.5 w-3.5 transition', open && 'rotate-180')} />
           </button>
+          {movable && (
+            <button onClick={() => setMoving(!moving)} className="ml-4 mt-3 inline-flex items-center gap-1 text-xs font-bold text-muted hover:text-ink" aria-expanded={moving}>
+              <CalendarDays className="h-3.5 w-3.5" /> Déplacer
+            </button>
+          )}
+          {moving && movable && (
+            <div className="rise mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Choisir un autre jour">
+              {DAYS_SHORT.map((d, i) => (
+                <button
+                  key={d}
+                  onClick={() => { onMove(i); setMoving(false); }}
+                  className={cx('rounded-lg px-2.5 py-1.5 text-xs font-bold transition', i === session.dayIndex ? 'bg-ink text-bg' : 'bg-sunken text-muted hover:text-ink')}
+                >
+                  {d} {toDate(addDays(weekStart, i)).getDate()}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {session.type !== 'COURSE' || isPast || isToday ? (
@@ -460,6 +566,81 @@ function AdherenceCard({ plan, completions, activities, viewWeek, todayWeek, onS
           ))}
         </div>
       </div>
+    </Card>
+  );
+}
+
+function LoadChart({ plan, completions, activities, activitiesById, todayWeek }) {
+  const [metric, setMetric] = useState('km');
+  const rows = useMemo(() => plan.map((w) => {
+    const end = toISODate(addDays(w.startDate, 6));
+    const acts = activities.filter((a) => a.date >= w.startDate && a.date <= end);
+    const manual = w.sessions.filter((s) => completions[s.id]?.done && !activitiesById[completions[s.id]?.activityId]);
+    return {
+      number: w.number,
+      phase: w.phase,
+      planned: metric === 'km' ? w.targetKm : w.targetDPlus,
+      actual: Math.round(acts.reduce((t, a) => t + (metric === 'km' ? a.distanceKm : a.dplus), 0) + manual.reduce((t, s) => t + (metric === 'km' ? s.km : s.dplus), 0)),
+    };
+  }), [plan, completions, activities, activitiesById, metric]);
+  const max = Math.max(...rows.map((r) => Math.max(r.planned, r.actual)), 1);
+  const past = rows.filter((r) => r.number <= todayWeek);
+  const sumP = past.reduce((t, r) => t + r.planned, 0);
+  const sumA = past.reduce((t, r) => t + r.actual, 0);
+  const unit = metric === 'km' ? 'km' : 'm';
+
+  return (
+    <Card className="p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Courbe de charge</div>
+          <div className="font-display text-xl font-extrabold">Réalisé / prévu</div>
+          <div className="text-xs text-muted tabular">Depuis le début : {sumA} {unit} réalisés pour {sumP} {unit} prévus</div>
+        </div>
+        <Segmented className="w-40" options={[{ value: 'km', label: 'Volume' }, { value: 'dplus', label: 'D+' }]} value={metric} onChange={setMetric} />
+      </div>
+      <div className="mt-5 flex h-40 items-end gap-1.5">
+        {rows.map((r) => (
+          <div key={r.number} className="relative flex h-full flex-1 flex-col justify-end" title={`Semaine ${r.number} : ${r.actual} / ${r.planned} ${unit}`}>
+            <div className="absolute inset-x-0 bottom-0 rounded-t-[3px] border border-b-0 border-dashed" style={{ height: `${(r.planned / max) * 100}%`, borderColor: PHASES[r.phase].color, opacity: 0.7 }} />
+            <div className="relative rounded-t-[3px]" style={{ height: `${(r.actual / max) * 100}%`, background: PHASES[r.phase].color, opacity: r.number > todayWeek ? 0 : 1 }} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-1.5 text-center text-[10px] font-bold text-muted tabular">
+        {rows.map((r) => <span key={r.number} className={cx('flex-1', r.number === todayWeek && 'text-ink')}>{rows.length > 16 && r.number % 2 === 0 ? '' : `S${r.number}`}</span>)}
+      </div>
+      <div className="mt-3 flex gap-4 text-[11px] font-bold text-muted">
+        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-muted" />Réalisé</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm border border-dashed border-muted" />Prévu</span>
+      </div>
+    </Card>
+  );
+}
+
+function VmaCard({ profile, activities, onApply }) {
+  const est = useMemo(() => estimateVma(activities), [activities]);
+  const current = Number(profile.vma);
+  const fmt = (v) => String(v).replace('.', ',');
+  return (
+    <Card className="p-5 sm:p-6">
+      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Estimation de VMA</div>
+      {!est ? (
+        <p className="mt-2 text-sm text-muted">Pas encore assez de données : il faut au moins une sortie plutôt plate de 12 à 75 minutes. Votre VMA actuelle : {fmt(current)} km/h.</p>
+      ) : (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-end gap-6">
+            <Stat label="D’après vos sorties" value={`≥ ${fmt(est.vma)}`} unit="km/h" accent />
+            <Stat label="Dans votre profil" value={fmt(current)} unit="km/h" />
+          </div>
+          <div className="max-w-md text-sm text-muted">
+            Calculée sur « {est.activity.name} » ({formatKm(est.activity.distanceKm)} km en {formatDuration(est.activity.movingMin)}). C’est un minimum : la sortie n’était peut-être pas courue à fond.
+            {est.vma > current
+              ? <div className="mt-2"><Button size="sm" onClick={() => onApply(Math.min(22, est.vma))}>Mettre ma VMA à {fmt(Math.min(22, est.vma))} km/h</Button></div>
+              : <div className="mt-1 font-semibold text-ink">Votre VMA de profil est cohérente.</div>}
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

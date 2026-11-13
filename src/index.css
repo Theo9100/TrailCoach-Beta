@@ -19,6 +19,7 @@
   --type-cotes: #b7791f;
   --type-long: #2f6690;
   --type-recup: #6b8f8a;
+  --type-renfo: #7a5c99;
 
   --phase-foncier: #4f8a5f;
   --phase-dev: #c08a2d;
@@ -52,6 +53,7 @@
   --type-cotes: #e0a542;
   --type-long: #63a3d4;
   --type-recup: #8fb3ad;
+  --type-renfo: #b095d4;
 
   --phase-foncier: #6fb583;
   --phase-dev: #e0a542;
@@ -104,6 +106,31 @@ body::before {
 .glass-pill {
   background: var(--glass-pill);
   box-shadow: inset 0 1px 0 var(--glass-shine), 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+/* Lentille de la barre d'onglets : verre plus clair, liseré lumineux, reflets */
+.lens {
+  background:
+    radial-gradient(120% 90% at 50% -20%, var(--glass-shine), transparent 60%),
+    var(--glass-pill);
+  box-shadow:
+    inset 0 1px 0 var(--glass-shine),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  will-change: transform;
+}
+.lens-lifted {
+  background:
+    radial-gradient(90% 70% at 30% 0%, var(--glass-shine), transparent 55%),
+    radial-gradient(80% 60% at 75% 110%, rgb(var(--accent-rgb) / 0.22), transparent 60%),
+    rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(3px) saturate(220%) brightness(1.12);
+  backdrop-filter: blur(3px) saturate(220%) brightness(1.12);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-border),
+    inset 0 2px 1px var(--glass-shine),
+    inset 6px 0 10px -6px rgb(var(--accent-rgb) / 0.35),
+    inset -6px 0 10px -6px rgba(90, 170, 255, 0.3),
+    0 10px 24px -6px rgba(0, 0, 0, 0.35);
 }
 .card-shadow {
   box-shadow: var(--card-shadow);
