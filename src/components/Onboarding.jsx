@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Calculator, Check, Moon, Sun } from 'lucide-reac
 import { Button, Card, Field, Logo, RangeField, Segmented, cx, inputClass } from './ui';
 import { LEVELS, PHASES, buildMacroCycle, peakTargets, totalWeeksFor, vmaFrom10k } from '../lib/plan';
 import { addDays, daysBetween, formatLongDate, mondayOf, toISODate } from '../lib/format';
+import RaceGpxField, { trackToProfilePatch } from './RaceGpxField';
 
 const STEPS = ['Vous', 'Objectif', 'Disponibilités'];
 
@@ -25,7 +26,7 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
   const canNext = step === 0 ? data.name.trim().length > 0 : step === 1 ? !dateError && data.raceName.trim() : true;
 
   return (
-    <div className="min-h-screen bg-bg lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       {/* Panneau visuel */}
       <aside className="relative overflow-hidden bg-night text-paper px-6 py-8 sm:px-10 lg:min-h-screen lg:py-12 flex flex-col">
         <div className="topo topo-layer" style={{ filter: 'invert(1)', opacity: 0.09 }} />
@@ -121,13 +122,18 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
                   <h2 className="font-display text-3xl font-black">Votre défi</h2>
                   <p className="mt-1 text-sm text-muted">La course cible et sa date fixent la durée de la préparation.</p>
                 </header>
+                <RaceGpxField
+                  track={data.raceTrack}
+                  onLoad={(track) => set(trackToProfilePatch(track, data.raceName))}
+                  onClear={() => set({ raceTrack: null })}
+                />
                 <Field label="Nom de la course">
                   <input className={inputClass} value={data.raceName} placeholder="Ex. Trail des Aiguilles" onChange={(e) => set({ raceName: e.target.value })} />
                 </Field>
                 <Field label="Date de la course" hint={dateError || `${formatLongDate(data.raceDate)} · ${weeks} semaines de préparation`}>
                   <input type="date" className={cx(inputClass, dateError && 'border-[color:var(--type-vma)]')} min={minDate} max={maxDate} value={data.raceDate} onChange={(e) => set({ raceDate: e.target.value })} />
                 </Field>
-                <RangeField label="Distance" unit="km" min={10} max={170} step={1} value={data.distance} onChange={(distance) => set({ distance })} />
+                <RangeField label="Distance" unit="km" min={10} max={170} step={1} value={data.distance} onChange={(distance) => set({ distance })} hint={data.raceTrack ? 'Valeur lue dans le tracé GPX, modifiable.' : undefined} />
                 <RangeField label="Dénivelé positif" unit="m D+" min={100} max={10000} step={50} value={data.elevation} onChange={(elevation) => set({ elevation })} hint={`${Math.round(data.elevation / Math.max(1, data.distance))} m de D+ par km`} />
               </>
             )}
@@ -177,7 +183,7 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
                 Continuer <ArrowRight className="h-4 w-4" />
               </Button>
             ) : (
-              <Button size="lg" className="flex-1" onClick={() => onComplete({ ...data, name: data.name.trim(), raceName: data.raceName.trim() })}>
+              <Button size="lg" className="flex-1" onClick={() => onComplete({ ...data, name: data.name.trim(), raceName: data.raceName.trim(), createdAt: toISODate(new Date()) })}>
                 Créer mon programme <Check className="h-4 w-4" />
               </Button>
             )}

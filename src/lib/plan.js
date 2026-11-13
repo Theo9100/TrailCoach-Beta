@@ -268,6 +268,9 @@ function buildContent(type, ctx) {
           warmup,
           { label: 'Montées', detail: `${n} × 10–12 min de montée à allure course (marche active si > 15 %, bâtons si utilisés le jour J)` },
           { label: 'Descentes', detail: 'Redescentes techniques à allure contrôlée : appuis courts, regard loin' },
+          ...(ctx.track?.longestClimb
+            ? [{ label: 'Repère course', detail: `La plus longue montée du parcours fait ${ctx.track.longestClimb.gain} m D+ sur ${String(ctx.track.longestClimb.km).replace('.', ',')} km (${ctx.track.longestClimb.grade} % de moyenne) : choisissez une pente proche.` }]
+            : []),
         ],
       };
     }
@@ -366,6 +369,7 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal') {
       intensity: adj.intensity || 1,
       isRecovery: meta.isRecovery,
       ultra,
+      track: profile.raceTrack,
     });
     if (adj.intensity > 0 && adj.intensity < 1 && (type === 'VMA' || type === 'COTES')) {
       content.steps = [...content.steps, { label: 'Ajustement', detail: 'Fatigue signalée : nombre de répétitions réduit, stoppez si les sensations sont mauvaises.' }];

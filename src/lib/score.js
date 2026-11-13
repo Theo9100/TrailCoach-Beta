@@ -21,8 +21,9 @@ function combine({ regularity, conformity, volume }) {
   return w ? Math.round((parts.reduce((s, [k, v]) => s + k * v, 0) / w) * 100) : null;
 }
 
-function evaluate(sessions, completions, activities, activitiesById, today, from, to) {
-  const past = sessions.filter((s) => s.type !== 'COURSE' && (s.date < today || completions[s.id]?.done));
+function evaluate(sessions, completions, activities, activitiesById, today, from, to, since) {
+  // Les séances antérieures à la création du programme ne comptent pas (sauf si validées)
+  const past = sessions.filter((s) => s.type !== 'COURSE' && (completions[s.id]?.done || (s.date < today && s.date >= since)));
   if (!past.length) return null;
 
   const done = past.filter((s) => completions[s.id]?.done);
@@ -54,14 +55,14 @@ function evaluate(sessions, completions, activities, activitiesById, today, from
   };
 }
 
-export function planAdherence(plan, completions, activities, today = toISODate(new Date())) {
+export function planAdherence(plan, completions, activities, since = '', today = toISODate(new Date())) {
   const activitiesById = Object.fromEntries(activities.map((a) => [a.id, a]));
   const weeks = plan.map((w) => ({
     number: w.number,
-    ...(evaluate(w.sessions, completions, activities, activitiesById, today, w.startDate, toISODate(addDays(w.startDate, 6))) || { score: null }),
+    ...(evaluate(w.sessions, completions, activities, activitiesById, today, w.startDate, toISODate(addDays(w.startDate, 6)), since) || { score: null }),
   }));
   const end = plan.length ? toISODate(addDays(plan[plan.length - 1].startDate, 6)) : today;
-  const global = plan.length ? evaluate(plan.flatMap((w) => w.sessions), completions, activities, activitiesById, today, plan[0].startDate, end) : null;
+  const global = plan.length ? evaluate(plan.flatMap((w) => w.sessions), completions, activities, activitiesById, today, plan[0].startDate, end, since) : null;
   return { global, weeks };
 }
 

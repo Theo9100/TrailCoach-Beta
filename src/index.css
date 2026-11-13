@@ -26,6 +26,14 @@
   --phase-taper: #3d78a3;
 
   --contour: rgba(27, 31, 26, 0.07);
+  --glass-bg: rgba(252, 250, 245, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --glass-shine: rgba(255, 255, 255, 0.85);
+  --glass-shadow: 0 10px 34px -8px rgba(27, 31, 26, 0.22), 0 2px 6px rgba(27, 31, 26, 0.06);
+  --glass-pill: rgba(255, 255, 255, 0.72);
+  --card-shadow: 0 1px 2px rgba(27, 31, 26, 0.04), 0 10px 28px -16px rgba(27, 31, 26, 0.16);
+  --glow-a: rgba(226, 85, 43, 0.13);
+  --glow-b: rgba(63, 98, 72, 0.12);
   color-scheme: light;
 }
 
@@ -51,12 +59,54 @@
   --phase-taper: #63a3d4;
 
   --contour: rgba(235, 231, 221, 0.06);
+  --glass-bg: rgba(30, 35, 31, 0.58);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shine: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --glass-pill: rgba(255, 255, 255, 0.11);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+  --glow-a: rgba(240, 110, 66, 0.12);
+  --glow-b: rgba(128, 170, 136, 0.08);
   color-scheme: dark;
 }
 
-html, body {
+html {
   background: rgb(var(--bg));
+}
+html, body {
   color: rgb(var(--ink));
+}
+
+/* Halo d'ambiance fixe : donne de la profondeur et de la matière au verre */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 36rem at 105% -10%, var(--glow-a), transparent 60%),
+    radial-gradient(48rem 32rem at -10% 30%, var(--glow-b), transparent 60%),
+    radial-gradient(40rem 30rem at 60% 115%, var(--glow-a), transparent 65%);
+}
+
+/* Verre « liquid glass » : flou, saturation, reflet haut et ombre portée */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-shine), inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass { background: rgb(var(--surface) / 0.97); }
+}
+.glass-pill {
+  background: var(--glass-pill);
+  box-shadow: inset 0 1px 0 var(--glass-shine), 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.card-shadow {
+  box-shadow: var(--card-shadow);
 }
 
 body {

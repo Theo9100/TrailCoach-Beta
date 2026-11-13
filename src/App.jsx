@@ -14,7 +14,7 @@ import { toISODate } from './lib/format';
 import { defaultProfile, migrateLegacyProfile, usePersistentState } from './lib/storage';
 
 const TABS = [
-  { id: 'dashboard', label: 'Mon Programme', icon: CalendarRange },
+  { id: 'dashboard', label: 'Mon Programme', short: 'Programme', icon: CalendarRange },
   { id: 'sessions', label: 'Mes Séances & GPX', short: 'Séances & GPX', icon: MapIcon },
   { id: 'profile', label: 'Profil', icon: UserRound },
   { id: 'settings', label: 'Réglages', icon: Settings, iconOnly: true },
@@ -201,7 +201,7 @@ export default function App() {
       <Onboarding
         initial={profile || defaultProfile()}
         onComplete={startProgram}
-        onSkip={() => startProgram({ ...defaultProfile(), name: 'Coureur' })}
+        onSkip={() => startProgram({ ...defaultProfile(), name: 'Coureur', createdAt: toISODate(new Date()) })}
         canCancel={!!profile}
         onCancel={() => setWizardOpen(false)}
         dark={dark}
@@ -210,15 +210,17 @@ export default function App() {
     );
   }
 
+  const tabIndex = Math.max(0, TABS.findIndex((t) => t.id === tab));
+
   return (
-    <div className="min-h-screen bg-bg pb-24 md:pb-10">
-      <header className="sticky top-0 z-40 border-b border-line bg-bg/85 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4">
+    <div className="min-h-screen pb-32 md:pb-12">
+      <header className="sticky top-0 z-40 px-3 pt-3 sm:px-4">
+        <div className="glass mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 rounded-2xl pl-3 pr-3 md:h-16 md:pl-4 md:pr-2.5">
           <div className="flex items-center gap-2">
             <Logo />
             <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-accent">Beta</span>
           </div>
-          <nav className="hidden items-center gap-1 rounded-xl bg-sunken p-1 md:flex" aria-label="Navigation principale">
+          <nav className="hidden items-center gap-1 rounded-xl bg-ink/[0.06] p-1 md:flex" aria-label="Navigation principale">
             {TABS.map((t) => (
               <button
                 key={t.id}
@@ -227,8 +229,8 @@ export default function App() {
                 aria-label={t.label}
                 title={t.label}
                 className={cx(
-                  'inline-flex h-9 items-center gap-2 rounded-lg px-3.5 text-xs font-bold transition',
-                  tab === t.id ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink',
+                  'inline-flex h-10 items-center gap-2 rounded-lg px-4 text-[13px] font-bold transition-all duration-200',
+                  tab === t.id ? 'glass-pill text-ink' : 'text-muted hover:bg-ink/[0.05] hover:text-ink',
                 )}
               >
                 <t.icon className={cx('h-4 w-4', tab === t.id && 'text-accent')} />
@@ -288,17 +290,29 @@ export default function App() {
         )}
       </main>
 
-      {/* Barre d'onglets mobile */}
-      <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur md:hidden" aria-label="Navigation principale">
-        <div className="grid grid-cols-4">
+      {/* Barre d'onglets mobile, flottante, effet verre */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 px-4 md:hidden"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        aria-label="Navigation principale"
+      >
+        <div className="glass relative mx-auto grid max-w-md grid-cols-4 rounded-[1.75rem] p-1.5">
+          <span
+            aria-hidden="true"
+            className="glass-pill pointer-events-none absolute bottom-1.5 left-1.5 top-1.5 rounded-[1.35rem] transition-transform duration-300 ease-[cubic-bezier(0.3,1.4,0.5,1)]"
+            style={{ width: 'calc((100% - 0.75rem) / 4)', transform: `translateX(${tabIndex * 100}%)` }}
+          />
           {TABS.map((t) => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               aria-current={tab === t.id ? 'page' : undefined}
-              className={cx('flex flex-col items-center gap-1 py-2.5 text-[10px] font-bold', tab === t.id ? 'text-accent' : 'text-muted')}
+              className={cx(
+                'relative flex flex-col items-center gap-0.5 rounded-[1.35rem] py-2 text-[10px] font-bold transition-colors duration-200 active:scale-95',
+                tab === t.id ? 'text-accent' : 'text-ink/60',
+              )}
             >
-              <t.icon className="h-5 w-5" />
+              <t.icon className="h-[22px] w-[22px]" strokeWidth={tab === t.id ? 2.4 : 2} />
               {t.short || t.label}
             </button>
           ))}

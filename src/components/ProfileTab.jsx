@@ -3,6 +3,7 @@ import { RotateCcw, Save } from 'lucide-react';
 import { Button, Card, Field, RangeField, SectionTitle, Segmented, cx, inputClass } from './ui';
 import { LEVELS, peakTargets, totalWeeksFor, trainingZones } from '../lib/plan';
 import { addDays, daysBetween, pace, toISODate } from '../lib/format';
+import RaceGpxField, { trackToProfilePatch } from './RaceGpxField';
 
 export default function ProfileTab({ profile, onSave, onRestartWizard }) {
   const [draft, setDraft] = useState(profile);
@@ -49,6 +50,11 @@ export default function ProfileTab({ profile, onSave, onRestartWizard }) {
 
           <Card className="space-y-5 p-5 sm:p-6">
             <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Objectif</h3>
+            <RaceGpxField
+              track={draft.raceTrack}
+              onLoad={(track) => set(trackToProfilePatch(track, draft.raceName))}
+              onClear={() => set({ raceTrack: null })}
+            />
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Course">
                 <input className={inputClass} value={draft.raceName} onChange={(e) => set({ raceName: e.target.value })} />
@@ -74,7 +80,7 @@ export default function ProfileTab({ profile, onSave, onRestartWizard }) {
             </div>
           </Card>
 
-          <div className="sticky bottom-20 z-10 flex items-center gap-3 rounded-xl2 border border-line bg-surface/95 p-3 backdrop-blur md:bottom-4">
+          <div className="glass sticky bottom-28 z-10 flex items-center gap-3 rounded-2xl p-3 md:bottom-4">
             <div className="flex-1 text-xs font-semibold text-muted">
               {saved && !dirty ? 'Profil enregistré, programme mis à jour.' : dirty ? `Nouveau plan : ${dateError ? '–' : totalWeeksFor(draft)} semaines, pic à ${peaks.peakKm} km / ${peaks.peakDPlus} m D+` : 'Aucune modification'}
             </div>
