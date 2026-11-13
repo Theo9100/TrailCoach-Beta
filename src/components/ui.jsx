@@ -6,7 +6,7 @@ export function cx(...parts) {
 
 export function Card({ className, children, ...rest }) {
   return (
-    <div className={cx('bg-surface border border-line rounded-xl2', className)} {...rest}>
+    <div className={cx('bg-surface border border-line rounded-xl2 card-shadow', className)} {...rest}>
       {children}
     </div>
   );
@@ -93,7 +93,7 @@ export function RangeField({ label, value, unit, min, max, step, onChange, hint 
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <span className="text-xs font-bold uppercase tracking-wider text-muted">{label}</span>
         <span className="font-display text-xl font-extrabold tabular">
-          {value}
+          {String(value).replace('.', ',')}
           {unit && <span className="ml-1 text-xs font-bold text-muted">{unit}</span>}
         </span>
       </div>

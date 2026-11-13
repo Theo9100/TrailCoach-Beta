@@ -5,6 +5,7 @@ import { ADJUSTMENTS, PHASES, SESSION_TYPES } from '../lib/plan';
 import { fingerprint, sendableSessions } from '../lib/intervals';
 import { workoutToIntervalsText } from '../lib/workout';
 import { planAdherence, scoreColor, scoreLabel } from '../lib/score';
+import { CourseProfile, courseSummary } from './RaceGpxField';
 import { DAYS_SHORT, daysBetween, formatDuration, formatKm, formatLongDate, formatShortDate, toDate, toISODate } from '../lib/format';
 
 export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch, activities = [] }) {
@@ -39,7 +40,7 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
             </div>
             <h1 className="font-display mt-2 text-4xl sm:text-5xl font-black leading-[0.95]">{profile.raceName}</h1>
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm font-bold">
-              <span className="inline-flex items-center gap-1.5"><Route className="h-4 w-4 text-muted" />{profile.distance} km</span>
+              <span className="inline-flex items-center gap-1.5"><Route className="h-4 w-4 text-muted" />{String(profile.distance).replace('.', ',')} km</span>
               <span className="inline-flex items-center gap-1.5 text-accent"><Mountain className="h-4 w-4" />{profile.elevation} m D+</span>
               <span className="text-muted">{profile.level} · VMA {String(profile.vma).replace('.', ',')} km/h</span>
             </div>
@@ -55,6 +56,16 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
             </div>
           </div>
         </div>
+
+        {profile.raceTrack && (
+          <div className="relative border-t border-line">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-6 pt-4 sm:px-8">
+              <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Profil du parcours</span>
+              <span className="text-xs font-semibold text-muted">{courseSummary(profile.raceTrack)}</span>
+            </div>
+            <CourseProfile track={profile.raceTrack} height={110} className="mt-2" />
+          </div>
+        )}
 
         {/* Vue d'ensemble de la saison */}
         <div className="relative border-t border-line px-6 pb-5 pt-4 sm:px-8">
@@ -108,6 +119,7 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
         viewWeek={viewWeek}
         todayWeek={todayWeek}
         onSelectWeek={setViewWeek}
+        since={profile.createdAt || ''}
       />
 
       {/* Semaine sélectionnée */}
@@ -386,8 +398,8 @@ function Ring({ score, size = 96 }) {
   );
 }
 
-function AdherenceCard({ plan, completions, activities, viewWeek, todayWeek, onSelectWeek }) {
-  const { global, weeks } = useMemo(() => planAdherence(plan, completions, activities), [plan, completions, activities]);
+function AdherenceCard({ plan, completions, activities, viewWeek, todayWeek, onSelectWeek, since }) {
+  const { global, weeks } = useMemo(() => planAdherence(plan, completions, activities, since), [plan, completions, activities, since]);
   const parts = [
     { key: 'regularity', label: 'Régularité', hint: global ? `${global.done} / ${global.past} séances réalisées` : '', weight: '50 %' },
     { key: 'conformity', label: 'Conformité', hint: global?.conformity != null ? 'Écart moyen séance ↔ sortie' : 'Aucune sortie rattachée', weight: '30 %' },
