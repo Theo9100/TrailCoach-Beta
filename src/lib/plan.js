@@ -9,7 +9,7 @@
  */
 import { addDays, clamp, daysBetween, mondayOf, pace, roundTo, toISODate, weekdayIndex } from './format';
 import { buildWorkout } from './workout';
-import { strengthRoutine } from './exercises';
+import { STRENGTH_STAGES, strengthRoutine, strengthStage } from './exercises';
 
 export const LEVELS = ['Débutant', 'Intermédiaire', 'Avancé'];
 
@@ -463,7 +463,8 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts
     const hard = new Set(sessions.filter((x) => ['LONG', 'PREPA'].includes(x.type)).map((x) => x.dayIndex - 1));
     let day = [0, 1, 2, 3, 4, 5, 6].find((d) => !used.has(d) && !hard.has(d));
     if (day == null) day = (sessions.find((x) => x.type === 'EF' || x.type === 'RECUP') || sessions[0]).dayIndex;
-    const routine = strengthRoutine(meta.phase, profile.level, meta.isRecovery || adj.intensity < 1);
+    const stage = strengthStage(profile, meta.number, totalWeeksFor(profile));
+    const routine = strengthRoutine(meta.phase, profile.level, meta.isRecovery || adj.intensity < 1, stage);
     sessions.push({
       id: `${meta.number}-renfo`,
       dayIndex: day,
@@ -471,11 +472,15 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts
       type: 'RENFO',
       km: 0,
       dplus: 0,
-      durationMin: meta.phase === 'affutage' ? 15 : 25,
+      durationMin: meta.phase === 'affutage' ? 15 : routine.stage === 2 ? 30 : 25,
       title: routine.title,
-      zone: 'Sans impact',
+      zone: routine.stage != null ? `${STRENGTH_STAGES[routine.stage].label} · ${STRENGTH_STAGES[routine.stage].hint}` : 'Sans impact',
+      stage: routine.stage,
       exercises: routine.items,
-      steps: [{ label: 'Déroulé', detail: 'Enchaîner les exercices avec 45 s de récupération entre les séries. Privilégier la qualité du geste à la vitesse.' }],
+      steps: [
+        { label: 'Déroulé', detail: 'Enchaîner les exercices avec 45 s de récupération entre les séries. Privilégier la qualité du geste à la vitesse.' },
+        ...(routine.stage > 0 ? [{ label: 'Progression', detail: 'Exercices exigeants : si un mouvement n’est pas encore maîtrisé, revenez à sa version simple (squat, fente, planche) le temps de progresser.' }] : []),
+      ],
     });
   }
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Flag, Loader2, Mountain, MoveRight, Route, Send, Sparkles, Watch } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Flag, Loader2, Mountain, MoveRight, Route, Send, Share2, Sparkles, Timer, Watch } from 'lucide-react';
 import { Button, Card, ProgressBar, SectionTitle, Segmented, Stat, TypeChip, cx } from './ui';
 import { ADJUSTMENTS, PHASES, SESSION_TYPES } from '../lib/plan';
 import { fingerprint, sendableSessions } from '../lib/intervals';
@@ -8,15 +8,23 @@ import { planAdherence, scoreColor, scoreLabel } from '../lib/score';
 import { CourseProfile, courseSummary } from './RaceGpxField';
 import ExerciseFigure from './ExerciseFigure';
 import RaceDay from './RaceDay';
+import VmaTest from './VmaTest';
+import Recap, { PastPreparations } from './Recap';
+import ShareModal from './ShareModal';
+import { recapCard, sessionCard, weekCard } from '../lib/sharecard';
 import { EXERCISES } from '../lib/exercises';
 import { estimateVma } from '../lib/adapt';
 import { addDays } from '../lib/format';
 import { DAYS_SHORT, daysBetween, formatDuration, formatKm, formatLongDate, formatShortDate, toDate, toISODate } from '../lib/format';
 
-export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch, activities = [], moves = {}, onMove, onFeedback, raceSettings, setRaceSettings, gear, setGear, onApplyVma, fatigue, onDismissRecal }) {
-  const [view, setView] = useState('plan');
+export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch, activities = [], moves = {}, onMove, onFeedback, raceSettings, setRaceSettings, gear, setGear, onApplyVma, fatigue, onDismissRecal, vmaTests = [], onVmaTest, raceResult, setRaceResult, history = [], onNewGoal }) {
   const week = plan[viewWeek - 1];
   const daysLeft = daysBetween(new Date(), profile.raceDate);
+  const courseSession = plan[plan.length - 1]?.sessions.find((x) => x.type === 'COURSE');
+  const raceDone = daysLeft < 0 || !!completions[courseSession?.id]?.done;
+  const [view, setView] = useState(raceDone ? 'recap' : 'plan');
+  const [share, setShare] = useState(null);
+  const shownView = view === 'recap' && !raceDone ? 'plan' : view;
   const today = toISODate(new Date());
 
   const done = week.sessions.filter((s) => completions[s.id]?.done);
@@ -120,14 +128,33 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
 
       <Segmented
         className="mx-auto max-w-md"
-        options={[{ value: 'plan', label: 'Entraînement' }, { value: 'race', label: 'Jour J' }, { value: 'stats', label: 'Suivi' }]}
-        value={view}
+        options={raceDone
+          ? [{ value: 'recap', label: 'Bilan' }, { value: 'plan', label: 'Plan' }, { value: 'race', label: 'Jour J' }, { value: 'stats', label: 'Suivi' }]
+          : [{ value: 'plan', label: 'Entraînement' }, { value: 'race', label: 'Jour J' }, { value: 'stats', label: 'Suivi' }]}
+        value={shownView}
         onChange={setView}
       />
 
-      {view === 'race' && <RaceDay profile={profile} settings={raceSettings} setSettings={setRaceSettings} gear={gear} setGear={setGear} />}
+      {shownView === 'recap' && (
+        <Recap
+          profile={profile}
+          plan={plan}
+          completions={completions}
+          activities={activities}
+          raceSettings={raceSettings}
+          raceResult={raceResult}
+          setRaceResult={setRaceResult}
+          history={history}
+          onNewGoal={onNewGoal}
+          onShare={(recap, finish) => setShare(recapCard(recap, finish))}
+        />
+      )}
 
-      {view === 'stats' && (
+      {share && <ShareModal data={share} onClose={() => setShare(null)} />}
+
+      {shownView === 'race' && <RaceDay profile={profile} settings={raceSettings} setSettings={setRaceSettings} gear={gear} setGear={setGear} activities={activities} />}
+
+      {shownView === 'stats' && (
         <div className="rise space-y-6">
           <AdherenceCard
             plan={plan}
@@ -139,12 +166,13 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
             since={profile.createdAt || ''}
           />
           <LoadChart plan={plan} completions={completions} activities={activities} activitiesById={activitiesById} todayWeek={todayWeek} />
-          <VmaCard profile={profile} activities={activities} onApply={onApplyVma} />
+          <VmaCard profile={profile} activities={activities} onApply={onApplyVma} tests={vmaTests} onRecord={onVmaTest} />
+          {!raceDone && <PastPreparations history={history} />}
         </div>
       )}
 
       {/* Semaine sélectionnée */}
-      {view === 'plan' && (
+      {shownView === 'plan' && (
       <section className="rise space-y-5">
         {week.notes?.map((n) => (
           <div key={n.text} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm font-semibold">
@@ -173,6 +201,9 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
             }
           />
           <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShare(weekCard(week, { profile, completions, activitiesById }))} aria-label="Partager la semaine">
+              <Share2 className="h-4 w-4" /> <span className="max-sm:hidden">Partager</span>
+            </Button>
             <Button variant="ghost" size="sm" disabled={viewWeek <= 1} onClick={() => setViewWeek(viewWeek - 1)} aria-label="Semaine précédente">
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -214,6 +245,7 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
                 weekStart={week.startDate}
                 onMove={(d) => onMove(s.id, d === (s.plannedDay ?? s.dayIndex) ? null : d)}
                 onFeedback={(patch) => onFeedback(s.id, patch)}
+                onShare={() => setShare(sessionCard(s, { profile, activity: activitiesById[completions[s.id]?.activityId], completion: completions[s.id] }))}
               />
             ))}
           </div>
@@ -271,7 +303,7 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
   );
 }
 
-function SessionCard({ session, isToday, isPast, completion, activity, onToggle, vma, weekStart, onMove, onFeedback }) {
+function SessionCard({ session, isToday, isPast, completion, activity, onToggle, vma, weekStart, onMove, onFeedback, onShare }) {
   const [open, setOpen] = useState(isToday);
   const [moving, setMoving] = useState(false);
   const movable = !['COURSE', 'PREPA'].includes(session.type) && !completion?.done;
@@ -373,6 +405,11 @@ function SessionCard({ session, isToday, isPast, completion, activity, onToggle,
             {open ? 'Masquer le détail' : 'Voir le détail'}
             <ChevronDown className={cx('h-3.5 w-3.5 transition', open && 'rotate-180')} />
           </button>
+          {isDone && (
+            <button onClick={onShare} className="ml-4 mt-3 inline-flex items-center gap-1 text-xs font-bold text-muted hover:text-ink">
+              <Share2 className="h-3.5 w-3.5" /> Partager
+            </button>
+          )}
           {movable && (
             <button onClick={() => setMoving(!moving)} className="ml-4 mt-3 inline-flex items-center gap-1 text-xs font-bold text-muted hover:text-ink" aria-expanded={moving}>
               <CalendarDays className="h-3.5 w-3.5" /> Déplacer
@@ -618,29 +655,60 @@ function LoadChart({ plan, completions, activities, activitiesById, todayWeek })
   );
 }
 
-function VmaCard({ profile, activities, onApply }) {
+function VmaCard({ profile, activities, onApply, tests = [], onRecord }) {
   const est = useMemo(() => estimateVma(activities), [activities]);
+  const [testing, setTesting] = useState(false);
   const current = Number(profile.vma);
   const fmt = (v) => String(v).replace('.', ',');
+  const last = tests[0];
   return (
     <Card className="p-5 sm:p-6">
-      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Estimation de VMA</div>
-      {!est ? (
-        <p className="mt-2 text-sm text-muted">Pas encore assez de données : il faut au moins une sortie plutôt plate de 12 à 75 minutes. Votre VMA actuelle : {fmt(current)} km/h.</p>
-      ) : (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-end gap-6">
-            <Stat label="D’après vos sorties" value={`≥ ${fmt(est.vma)}`} unit="km/h" accent />
-            <Stat label="Dans votre profil" value={fmt(current)} unit="km/h" />
-          </div>
-          <div className="max-w-md text-sm text-muted">
-            Calculée sur « {est.activity.name} » ({formatKm(est.activity.distanceKm)} km en {formatDuration(est.activity.movingMin)}). C’est un minimum : la sortie n’était peut-être pas courue à fond.
-            {est.vma > current
-              ? <div className="mt-2"><Button size="sm" onClick={() => onApply(Math.min(22, est.vma))}>Mettre ma VMA à {fmt(Math.min(22, est.vma))} km/h</Button></div>
-              : <div className="mt-1 font-semibold text-ink">Votre VMA de profil est cohérente.</div>}
-          </div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">VMA</div>
+          <div className="font-display text-xl font-extrabold">Vos allures reposent sur elle</div>
+          <p className="mt-1 max-w-xl text-sm text-muted">
+            {last
+              ? `Dernier test le ${new Date(last.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })} : ${last.distance} m en 6 minutes, soit ${fmt(last.vma)} km/h. Refaites-le toutes les 6 à 8 semaines pour suivre vos progrès.`
+              : 'Un test de terrain de 6 minutes, guidé pas à pas, mesure votre VMA réelle et recale toutes les allures du programme.'}
+          </p>
+        </div>
+        <Button onClick={() => setTesting(true)}><Timer className="h-4 w-4" /> {last ? 'Refaire le test' : 'Faire le test de VMA'}</Button>
+      </div>
+
+      {tests.length > 1 && (
+        <div className="mt-4 flex items-end gap-2" aria-label="Historique des tests">
+          {[...tests].reverse().slice(-8).map((t) => (
+            <div key={t.at} className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-bold tabular">{fmt(t.vma)}</span>
+              <span className="block w-7 rounded-t-[3px] bg-accent" style={{ height: `${Math.max(8, (t.vma - 8) * 4)}px`, opacity: t === last ? 1 : 0.45 }} />
+              <span className="text-[10px] font-bold text-muted">{new Date(t.at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'numeric' })}</span>
+            </div>
+          ))}
         </div>
       )}
+
+      <div className="mt-4 border-t border-line pt-4">
+        <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Estimation d’après vos sorties</div>
+        {!est ? (
+          <p className="mt-2 text-sm text-muted">Pas encore assez de données : il faut au moins une sortie plutôt plate de 12 à 75 minutes. Votre VMA actuelle : {fmt(current)} km/h.</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-end gap-6">
+              <Stat label="D’après vos sorties" value={`≥ ${fmt(est.vma)}`} unit="km/h" accent />
+              <Stat label="Dans votre profil" value={fmt(current)} unit="km/h" />
+            </div>
+            <div className="max-w-md text-sm text-muted">
+              Calculée sur « {est.activity.name} » ({formatKm(est.activity.distanceKm)} km en {formatDuration(est.activity.movingMin)}). C’est un minimum : la sortie n’était peut-être pas courue à fond.
+              {est.vma > current
+                ? <div className="mt-2"><Button size="sm" variant="ghost" onClick={() => onApply(Math.min(22, est.vma))}>Mettre ma VMA à {fmt(Math.min(22, est.vma))} km/h</Button></div>
+                : <div className="mt-1 font-semibold text-ink">Votre VMA de profil est cohérente.</div>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {testing && <VmaTest currentVma={current} onApply={onApply} onRecord={onRecord} onClose={() => setTesting(false)} />}
     </Card>
   );
 }

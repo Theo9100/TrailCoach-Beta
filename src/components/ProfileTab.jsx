@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { Plus, RotateCcw, Save, Timer, Trash2 } from 'lucide-react';
 import { Button, Card, Field, RangeField, SectionTitle, Segmented, cx, inputClass } from './ui';
 import { LEVELS, peakTargets, totalWeeksFor, trainingZones } from '../lib/plan';
 import { addDays, daysBetween, pace, toISODate } from '../lib/format';
 import RaceGpxField, { trackToProfilePatch } from './RaceGpxField';
+import VmaTest from './VmaTest';
 
-export default function ProfileTab({ profile, onSave, onRestartWizard }) {
+export default function ProfileTab({ profile, onSave, onRestartWizard, onVmaTest }) {
   const [draft, setDraft] = useState(profile);
+  const [testing, setTesting] = useState(false);
   const [saved, setSaved] = useState(false);
   useEffect(() => { setDraft(profile); }, [profile]);
 
@@ -46,6 +48,10 @@ export default function ProfileTab({ profile, onSave, onRestartWizard }) {
               <RangeField label="VMA" unit="km/h" min={9} max={22} step={0.5} value={draft.vma} onChange={(v) => set({ vma: v })} />
               <RangeField label="FC max" unit="bpm" min={150} max={215} step={1} value={draft.fcMax} onChange={(v) => set({ fcMax: v })} />
             </div>
+            <button type="button" onClick={() => setTesting(true)} className="inline-flex items-center gap-1.5 text-xs font-bold text-accent hover:underline">
+              <Timer className="h-3.5 w-3.5" /> Vous ne connaissez pas votre VMA ? Faire le test guidé de 6 minutes
+            </button>
+            {testing && <VmaTest currentVma={draft.vma} onApply={(v) => set({ vma: v })} onRecord={onVmaTest} onClose={() => setTesting(false)} />}
           </Card>
 
           <Card className="space-y-5 p-5 sm:p-6">
@@ -82,6 +88,19 @@ export default function ProfileTab({ profile, onSave, onRestartWizard }) {
               <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted">Séance de renforcement hebdomadaire</span>
               <Segmented options={[{ value: true, label: 'Oui, avec exercices animés' }, { value: false, label: 'Non' }]} value={draft.strength !== false} onChange={(v) => set({ strength: v })} />
             </div>
+            {draft.strength !== false && (
+              <div>
+                <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted">Difficulté du renforcement</span>
+                <Segmented
+                  options={[{ value: 'auto', label: 'Progressive' }, { value: 'base', label: 'Bases' }, { value: 'avance', label: 'Avancée' }]}
+                  value={draft.strengthLevel || 'auto'}
+                  onChange={(v) => set({ strengthLevel: v })}
+                />
+                <p className="mt-1.5 text-xs text-muted">
+                  {{ auto: 'Les exercices se durcissent au fil des semaines : bases, puis travail sur une jambe, puis sauts et descentes freinées.', base: 'Squats, fentes, planche : les mouvements simples pendant tout le programme.', avance: 'Fentes bulgares, squats sautés, sauts sur une jambe dès la première semaine.' }[draft.strengthLevel || 'auto']}
+                </p>
+              </div>
+            )}
           </Card>
 
           <Card className="space-y-4 p-5 sm:p-6">

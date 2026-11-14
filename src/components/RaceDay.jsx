@@ -1,15 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, Check, Droplets, Flame, Plus, Timer, X } from 'lucide-react';
+import { AlertTriangle, Check, Droplets, Flame, Gauge, Plus, Timer, TrendingDown, TrendingUp, X } from 'lucide-react';
 import { Button, Card, Field, ProgressBar, Stat, cx, inputClass } from './ui';
 import TrackMap from './TrackMap';
-import { DEFAULT_GEAR, buildRacePlan, clockAt } from '../lib/raceplan';
-import { formatDuration, formatKm, pace } from '../lib/format';
+import { DEFAULT_GEAR, buildRacePlan, clockAt, trailCalibration } from '../lib/raceplan';
+import { formatDuration, formatKm, formatShortDate, pace } from '../lib/format';
 
 const KIND_COLOR = { Montée: 'var(--type-vma)', Descente: 'var(--type-long)', Roulant: 'var(--type-ef)' };
 
-export default function RaceDay({ profile, settings, setSettings, gear, setGear }) {
-  const s = { start: '08:00', factor: 1, cutoff: '', ...settings };
-  const plan = useMemo(() => buildRacePlan(profile, { factor: s.factor }), [profile, s.factor]);
+export default function RaceDay({ profile, settings, setSettings, gear, setGear, activities = [] }) {
+  const s = { start: '08:00', factor: 1, cutoff: '', useRuns: true, ...settings };
+  const calibration = useMemo(() => trailCalibration(activities, profile), [activities, profile]);
+  const refined = !!calibration && s.useRuns;
+  const plan = useMemo(() => buildRacePlan(profile, { factor: s.factor, speed: refined ? calibration.speed : undefined }), [profile, s.factor, refined, calibration]);
+  const theory = useMemo(() => (calibration ? buildRacePlan(profile, { factor: s.factor }).totalMinutes : null), [profile, s.factor, calibration]);
   const [newItem, setNewItem] = useState('');
   const set = (patch) => setSettings({ ...s, ...patch });
 
@@ -29,7 +32,7 @@ export default function RaceDay({ profile, settings, setSettings, gear, setGear 
             <h2 className="font-display text-2xl font-extrabold">Temps de passage estimés</h2>
             <p className="mt-1 max-w-xl text-sm text-muted">
               {plan.fromTrack
-                ? 'Calculés section par section à partir du tracé GPX, de votre VMA et d’un ralentissement progressif.'
+                ? `Calculés section par section à partir du tracé GPX, ${refined ? 'de vos sorties longues' : 'de votre VMA'} et d’un ralentissement progressif.`
                 : 'Estimation sur un parcours régulier. Importez le tracé GPX de la course dans Profil pour un découpage par montées et descentes.'}
             </p>
           </div>
@@ -41,6 +44,8 @@ export default function RaceDay({ profile, settings, setSettings, gear, setGear 
           <Stat label="Allure moyenne" value={pace(Number(profile.distance) / (plan.totalMinutes / 60))} unit="/km" />
           <Stat label="Sections" value={plan.sections.length} />
         </div>
+
+        <Calibration calibration={calibration} refined={refined} theory={theory} total={plan.totalMinutes} onToggle={() => set({ useRuns: !s.useRuns })} />
 
         <div className="mt-5 grid gap-4 sm:grid-cols-3">
           <Field label="Heure de départ">
@@ -172,3 +177,63 @@ export default function RaceDay({ profile, settings, setSettings, gear, setGear 
     </div>
   );
 }
+
+/** Encart « estimation affinée » : compare la théorie (VMA) et la vitesse constatée sur les sorties longues. */
+function Calibration({ calibration, refined, theory, total, onToggle }) {
+  const [open, setOpen] = useState(false);
+  if (!calibration) {
+    return (
+      <div className="mt-5 flex items-start gap-3 rounded-xl border border-dashed border-line p-3.5 text-sm text-muted">
+        <Gauge className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>Estimation basée sur votre VMA seule. Elle s’affinera automatiquement dès votre première sortie d’au moins 50 minutes avec du dénivelé (12 m de D+ par km ou plus), importée ou synchronisée.</span>
+      </div>
+    );
+  }
+  const faster = calibration.ratio > 1.005;
+  const slower = calibration.ratio < 0.995;
+  const Icon = slower ? TrendingDown : TrendingUp;
+  const diff = Math.abs(theory - total);
+  const fmt = (v) => String(Math.round(v * 10) / 10).replace('.', ',');
+  return (
+    <div className="mt-5 rounded-xl border p-3.5" style={{ borderColor: refined ? 'color-mix(in srgb, var(--type-ef) 45%, transparent)' : 'rgb(var(--line))', background: refined ? 'color-mix(in srgb, var(--type-ef) 7%, transparent)' : undefined }}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white" style={{ background: refined ? 'var(--type-ef)' : 'rgb(var(--muted))' }}><Icon className="h-4 w-4" /></span>
+          <div className="text-sm">
+            <div className="font-extrabold">
+              {refined ? `Estimation affinée d’après ${calibration.runs.length} sortie${calibration.runs.length > 1 ? 's' : ''} longue${calibration.runs.length > 1 ? 's' : ''}` : 'Estimation théorique (VMA seule)'}
+            </div>
+            <div className="text-muted tabular">
+              {refined
+                ? (faster || slower
+                  ? `${formatDuration(diff)} ${faster ? 'de moins' : 'de plus'} que la théorie (${formatDuration(theory)}) : vous êtes ${faster ? 'plus rapide' : 'plus lent'} que prévu en terrain vallonné.`
+                  : 'Vos sorties confirment l’estimation théorique.')
+                : `Vos sorties donneraient ${formatDuration(buildDelta(theory, calibration.ratio))}.`}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setOpen(!open)} aria-expanded={open}>{open ? 'Masquer' : 'Détail'}</Button>
+          <Button variant={refined ? 'ghost' : 'primary'} size="sm" onClick={onToggle}>{refined ? 'Revenir à la théorie' : 'Utiliser mes sorties'}</Button>
+        </div>
+      </div>
+      {open && (
+        <div className="rise mt-3 border-t border-line pt-3">
+          <ul className="space-y-1.5 text-xs tabular">
+            {calibration.runs.map((r) => (
+              <li key={r.activity.id} className="flex flex-wrap items-baseline justify-between gap-x-4">
+                <span className="font-bold">{r.activity.name} <span className="font-semibold text-muted">· {formatShortDate(r.activity.date)}</span></span>
+                <span className="text-muted">{formatKm(r.activity.distanceKm)} km · {r.activity.dplus} m D+ · {formatDuration(r.activity.movingMin)} → <span className="font-bold text-ink">{fmt(r.speed)} km-effort/h</span></span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            Un km-effort vaut 1 km à plat, 100 m de montée ou 500 m de descente. Les {calibration.runs.length > 1 ? `${calibration.runs.length} sorties les plus rapides` : 'sorties'} des 10 dernières semaines sont majorées pour passer d’une allure d’entraînement à une allure de course, puis mélangées à la théorie ({fmt(calibration.model)} km-effort/h). Résultat retenu : {fmt(calibration.speed)} km-effort/h.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const buildDelta = (theoryMinutes, ratio) => theoryMinutes / ratio;

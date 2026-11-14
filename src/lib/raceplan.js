@@ -2,6 +2,43 @@
  * Plan de course : découpage du parcours en sections, temps de passage estimés
  * et besoins en glucides / eau.
  */
+import { addDays, toISODate } from './format';
+
+const effortKm = (km, gain, loss) => km + gain / 100 + loss / 500;
+
+/** Vitesse théorique de course, en km-effort par heure, d'après la VMA seule. */
+export function modelRaceSpeed(profile) {
+  const vma = Number(profile.vma) || 14;
+  return vma * (Number(profile.distance) >= 60 ? 0.5 : 0.6);
+}
+
+/**
+ * Affine la vitesse de course à partir des vraies sorties longues en dénivelé des 10 dernières semaines.
+ * Une sortie compte si elle dure au moins 50 min, fait 6 km ou plus et grimpe au moins 12 m par km.
+ * On retient les 3 plus rapides (en km-effort par heure), on les majore pour passer d'une allure
+ * d'entraînement à une allure de course, puis on mélange avec la théorie selon le nombre de sorties.
+ */
+export function trailCalibration(activities, profile, today = new Date()) {
+  const vma = Number(profile.vma) || 14;
+  const ultra = Number(profile.distance) >= 60;
+  const model = modelRaceSpeed(profile);
+  const since = toISODate(addDays(today, -70));
+  const runs = (activities || [])
+    .filter((a) => a.date >= since && a.movingMin >= 50 && a.distanceKm >= 6 && a.dplus / a.distanceKm >= 12 && !['Hike', 'Walk'].includes(a.sport))
+    .map((a) => {
+      const effort = effortKm(a.distanceKm, a.dplus, a.dminus ?? a.dplus);
+      return { activity: a, effort, speed: effort / (a.movingMin / 60) };
+    })
+    .filter((r) => r.speed >= vma * 0.35 && r.speed <= vma * 0.9);
+  if (!runs.length) return null;
+  const best = [...runs].sort((x, y) => y.speed - x.speed).slice(0, 3);
+  const avg = best.reduce((t, r) => t + r.speed, 0) / best.length;
+  const raceBoost = ultra ? 1.06 : 1.14;
+  const weight = best.length / (best.length + 1);
+  const blended = model * (1 - weight) + avg * raceBoost * weight;
+  const speed = Math.min(model * 1.35, Math.max(model * 0.75, blended));
+  return { speed, model, ratio: speed / model, runs: best, count: runs.length };
+}
 
 /** D+ et D− entre deux distances, sur le profil [km, altitude]. */
 function gainLoss(profile, from, to) {
@@ -52,20 +89,20 @@ export function nutritionFor(totalMin) {
   return { carbsPerHour: carbs, waterPerHour: 500, sodiumPerHour: h > 3 ? 500 : 300 };
 }
 
-export function buildRacePlan(profile, { factor = 1 } = {}) {
+export function buildRacePlan(profile, { factor = 1, speed: speedOverride } = {}) {
   const track = profile.raceTrack?.profile?.length > 2 ? profile.raceTrack : null;
   const base = track ? sectionsFromTrack(track) : sectionsFallback(Number(profile.distance), Number(profile.elevation));
   const total = base[base.length - 1].to;
   const vma = Number(profile.vma) || 14;
   const ultra = total >= 60;
-  const speed = vma * (ultra ? 0.5 : 0.6);
+  const speed = speedOverride || vma * (ultra ? 0.5 : 0.6);
 
   let cum = 0;
   const sections = base.map((s, i) => {
     const km = s.to - s.from;
     const mid = (s.from + s.to) / 2 / total;
     const fatigue = 1 + (ultra ? 0.22 : 0.12) * mid; // ralentissement progressif
-    const effort = km + s.gain / 100 + s.loss / 500;
+    const effort = effortKm(km, s.gain, s.loss);
     const minutes = ((effort / speed) * 60 * fatigue) * factor;
     cum += minutes;
     const grade = (s.gain - s.loss) / (km * 1000);

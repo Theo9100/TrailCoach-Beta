@@ -12,6 +12,8 @@ import { compareToSession } from './lib/gpx';
 import { fetchActivities, fingerprint, pushSessions } from './lib/intervals';
 import { toISODate } from './lib/format';
 import { computeLoadMods, fatigueSignal } from './lib/adapt';
+import { archiveEntry } from './lib/recap';
+import { addDays, mondayOf } from './lib/format';
 import GlassTabBar from './components/GlassTabBar';
 import { defaultProfile, migrateLegacyProfile, usePersistentState } from './lib/storage';
 
@@ -59,6 +61,10 @@ export default function App() {
   const [recalOff, setRecalOff] = usePersistentState('recalOff', {}); // semaines où le recalage est refusé
   const [raceSettings, setRaceSettings] = usePersistentState('raceSettings', {});
   const [gear, setGear] = usePersistentState('gear', { checked: {}, custom: [] });
+  const [vmaTests, setVmaTests] = usePersistentState('vmaTests', []); // [{ at, distance, vma }], du plus récent au plus ancien
+  const [raceResult, setRaceResult] = usePersistentState('raceResult', null); // { minutes }
+  const [history, setHistory] = usePersistentState('history', []); // préparations terminées
+  const [newGoal, setNewGoal] = useState(null); // { initial, archive } pendant le questionnaire « nouvel objectif »
 
   const todayWeek = profile ? currentWeekNumber(profile) : 1;
   const plan = useMemo(() => {
@@ -104,14 +110,33 @@ export default function App() {
     return { sent: total };
   };
 
+  /** Après la course : archive le bilan et rouvre le questionnaire pour un nouvel objectif. */
+  const startNewGoal = (recap, finishMinutes, predictedMinutes) => {
+    const monday = mondayOf(new Date());
+    setNewGoal({
+      archive: archiveEntry(recap, finishMinutes, predictedMinutes),
+      initial: { ...profile, raceName: 'Mon prochain objectif', raceDate: toISODate(addDays(monday, 7 * 11 + 6)), raceTrack: null, prepRaces: [], planStart: toISODate(monday) },
+    });
+    setWizardOpen(true);
+  };
+
   const applyProgram = (p) => {
-    const restarted = profile && p.planStart !== profile.planStart;
+    const restarted = profile && (p.planStart !== profile.planStart || !!newGoal);
     setProfile(p);
     if (restarted) { setCompletions({}); setAdjustments({}); setIntervalsSync({}); setMoves({}); setRecalOff({}); }
+    if (newGoal) {
+      setHistory((prev) => [newGoal.archive, ...prev]);
+      setRaceResult(null);
+      setRaceSettings({});
+      setGear((g) => ({ ...g, checked: {} }));
+      setNewGoal(null);
+    }
     setViewWeek(currentWeekNumber(p));
     setWizardOpen(false);
     setTab('dashboard');
   };
+
+  const recordVmaTest = (test) => setVmaTests((prev) => [test, ...prev].slice(0, 20));
 
   const toggleCompletion = (id) => {
     setCompletions((prev) => {
@@ -212,11 +237,12 @@ export default function App() {
   if (!profile || wizardOpen) {
     return (
       <Onboarding
-        initial={profile || defaultProfile()}
+        key={newGoal ? 'new-goal' : 'wizard'}
+        initial={newGoal?.initial || profile || defaultProfile()}
         onComplete={startProgram}
         onSkip={() => startProgram({ ...defaultProfile(), name: 'Coureur', createdAt: toISODate(new Date()) })}
         canCancel={!!profile}
-        onCancel={() => setWizardOpen(false)}
+        onCancel={() => { setWizardOpen(false); setNewGoal(null); }}
         dark={dark}
         onToggleTheme={() => setTheme(dark ? 'light' : 'dark')}
       />
@@ -280,6 +306,12 @@ export default function App() {
             onApplyVma={(vma) => updateProfile({ ...profile, vma })}
             fatigue={fatigue}
             onDismissRecal={(w) => setRecalOff((prev) => ({ ...prev, [w]: true, [w + 1]: true }))}
+            vmaTests={vmaTests}
+            onVmaTest={recordVmaTest}
+            raceResult={raceResult}
+            setRaceResult={setRaceResult}
+            history={history}
+            onNewGoal={startNewGoal}
           />
         )}
         {tab === 'sessions' && (
@@ -298,7 +330,7 @@ export default function App() {
             onLink={linkActivity}
           />
         )}
-        {tab === 'profile' && <ProfileTab profile={profile} onSave={updateProfile} onRestartWizard={() => setWizardOpen(true)} />}
+        {tab === 'profile' && <ProfileTab profile={profile} onSave={updateProfile} onRestartWizard={() => setWizardOpen(true)} onVmaTest={recordVmaTest} />}
         {tab === 'settings' && (
           <SettingsTab
             theme={theme}
