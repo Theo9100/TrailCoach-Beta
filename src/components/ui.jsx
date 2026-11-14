@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export function cx(...parts) {
   return parts.filter(Boolean).join(' ');
@@ -158,5 +159,31 @@ export function Logo({ compact }) {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Fenêtre modale plein écran, rendue directement dans <body> pour passer au-dessus
+ * de l'en-tête et de la barre d'onglets. Échap ferme, la page ne défile plus derrière.
+ */
+export function Overlay({ label, onClose, closeOnBackdrop = true, children }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-night/65 backdrop-blur-sm sm:items-center sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      onMouseDown={(e) => { if (closeOnBackdrop && e.target === e.currentTarget) onClose(); }}
+    >
+      {children}
+    </div>,
+    document.body,
   );
 }

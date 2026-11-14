@@ -35,14 +35,15 @@ export default function ExerciseFigure({ id, size = 112 }) {
   const knee = j('knee'); const foot = j('foot'); const knee2 = j('knee2'); const foot2 = j('foot2');
   const elbow = j('elbow'); const hand = j('hand');
   const hasSecondLeg = !!(ex.a.knee2 || ex.b.knee2);
-  const lying = Math.abs(neck[1] - hip[1]) < 14; // au sol : pas de pied dessiné
+  const lying = ex.floor || Math.abs(neck[1] - hip[1]) < 14; // au sol : pas de pied dessiné
   const seg = (a, b, extra = {}) => <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} {...extra} />;
-  const toe = (f) => [f[0] + 8, Math.max(f[1], 92 - (92 - f[1]) * 0.15)];
+  const toe = (f) => (ex.toes === 'flat' ? [f[0] + 8, f[1]] : [f[0] + 8, Math.max(f[1], 92 - (92 - f[1]) * 0.15)]);
 
   return (
     <svg viewBox="0 0 120 100" width={size} height={(size * 100) / 120} className="shrink-0 rounded-xl bg-sunken" role="img" aria-label={`Animation : ${ex.name}`}>
       <line x1="6" x2="114" y1="94.5" y2="94.5" stroke="rgb(var(--line))" strokeWidth="1.5" strokeLinecap="round" />
       {ex.prop === 'box' && <rect x="62" y="80.5" width="26" height="14" rx="2" fill="rgb(var(--line))" />}
+      {ex.prop === 'boxBack' && <rect x="22" y="76.5" width="26" height="18" rx="2" fill="rgb(var(--line))" />}
       {ex.prop === 'wall' && <rect x="36" y="14" width="5" height="80" rx="1.5" fill="rgb(var(--line))" />}
       <g stroke="var(--type-renfo)" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
         {hasSecondLeg && (

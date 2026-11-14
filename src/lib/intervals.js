@@ -184,6 +184,7 @@ function toActivity(a, streams) {
     id: `icu-${a.id}`,
     source: 'intervals',
     icuId: a.id,
+    sport: a.type || null,
     fileName: null,
     name: a.name || 'Sortie',
     date: start.slice(0, 10),
