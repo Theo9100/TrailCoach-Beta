@@ -17,7 +17,7 @@ import { cx } from './ui';
 const STRIP = 1.5; // largeur d'une bande de bord, en px
 const BEZEL_STRIPS = 16; // bandes par bord : 24 px de verre courbe de chaque côté
 const BEZEL = STRIP * BEZEL_STRIPS;
-const OVERLAP = 0.5; // recouvrement entre bandes pour éviter les liserés
+const OVERLAP = 1.5; // recouvrement entre bandes pour éviter les liserés
 const GROW_W = 24; // élargissement de la lentille soulevée, en px
 const GROW_H = 14; // dépassement vertical de la lentille soulevée, en px
 const MAGNIFY = 0.2; // grossissement au centre de la lentille soulevée
