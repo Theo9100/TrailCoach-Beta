@@ -33,6 +33,10 @@
   --glass-shadow: 0 10px 34px -8px rgba(27, 31, 26, 0.22), 0 2px 6px rgba(27, 31, 26, 0.06);
   --glass-pill: rgba(255, 255, 255, 0.72);
   --card-shadow: 0 1px 2px rgba(27, 31, 26, 0.04), 0 10px 28px -16px rgba(27, 31, 26, 0.16);
+  --lens-body: rgba(27, 31, 26, 0.045);
+  --lens-glint: rgba(255, 255, 255, 0.55);
+  --lens-edge: rgba(255, 255, 255, 0.75);
+  --lens-edge-strong: rgba(255, 255, 255, 0.95);
   --glow-a: rgba(226, 85, 43, 0.13);
   --glow-b: rgba(63, 98, 72, 0.12);
   color-scheme: light;
@@ -67,6 +71,10 @@
   --glass-shadow: 0 12px 36px -8px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
   --glass-pill: rgba(255, 255, 255, 0.11);
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+  --lens-body: rgba(255, 255, 255, 0.035);
+  --lens-glint: rgba(255, 255, 255, 0.1);
+  --lens-edge: rgba(255, 255, 255, 0.16);
+  --lens-edge-strong: rgba(255, 255, 255, 0.5);
   --glow-a: rgba(240, 110, 66, 0.12);
   --glow-b: rgba(128, 170, 136, 0.08);
   color-scheme: dark;
@@ -107,30 +115,68 @@ body::before {
   background: var(--glass-pill);
   box-shadow: inset 0 1px 0 var(--glass-shine), 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-/* Lentille de la barre d'onglets : verre plus clair, liseré lumineux, reflets */
-.lens {
+/* Lentille de la barre d'onglets : pastille au repos, goutte de verre transparente quand elle est soulevée.
+   --lift (0 → 1) est mis à jour à chaque image par GlassTabBar. */
+.lens-shell {
+  --lift: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform, width, height;
+  contain: layout style;
+  box-shadow:
+    0 calc(var(--lift) * 12px) calc(var(--lift) * 26px) -8px rgba(0, 0, 0, calc(var(--lift) * 0.38)),
+    0 1px 3px rgba(0, 0, 0, calc(0.1 - var(--lift) * 0.06));
+}
+.lens-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  isolation: isolate;
+}
+.lens-fill,
+.lens-rim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.lens-fill {
   background:
     radial-gradient(120% 90% at 50% -20%, var(--glass-shine), transparent 60%),
     var(--glass-pill);
-  box-shadow:
-    inset 0 1px 0 var(--glass-shine),
-    inset 0 -1px 1px rgba(0, 0, 0, 0.06),
-    0 1px 3px rgba(0, 0, 0, 0.1);
-  will-change: transform;
+  box-shadow: inset 0 1px 0 var(--glass-shine), inset 0 -1px 1px rgba(0, 0, 0, 0.06);
+  opacity: calc(1 - var(--lift) * 0.82);
 }
-.lens-lifted {
+.lens-rim {
+  opacity: var(--lift);
+  background-color: var(--lens-body);
   background:
-    radial-gradient(90% 70% at 30% 0%, var(--glass-shine), transparent 55%),
-    radial-gradient(80% 60% at 75% 110%, rgb(var(--accent-rgb) / 0.22), transparent 60%),
-    rgba(255, 255, 255, 0.1);
-  -webkit-backdrop-filter: blur(3px) saturate(220%) brightness(1.12);
-  backdrop-filter: blur(3px) saturate(220%) brightness(1.12);
+    radial-gradient(70% 55% at 26% 0%, var(--lens-glint), transparent 60%),
+    radial-gradient(60% 45% at 78% 108%, var(--lens-glint), transparent 62%);
   box-shadow:
-    inset 0 0 0 1px var(--glass-border),
-    inset 0 2px 1px var(--glass-shine),
-    inset 6px 0 10px -6px rgb(var(--accent-rgb) / 0.35),
-    inset -6px 0 10px -6px rgba(90, 170, 255, 0.3),
-    0 10px 24px -6px rgba(0, 0, 0, 0.35);
+    inset 0 0 0 1px var(--lens-edge),
+    inset 1.5px 2px 1.5px -0.5px var(--lens-edge-strong),
+    inset -1.5px -2px 1.5px -0.5px var(--lens-edge-strong),
+    inset 9px 0 12px -9px rgb(var(--accent-rgb) / 0.45),
+    inset -9px 0 12px -9px rgba(90, 170, 255, 0.4),
+    inset 0 0 14px rgba(255, 255, 255, 0.06);
+}
+.lens-strip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+.lens-copy {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--bw);
+  height: var(--bh);
+  transform-origin: 0 0;
 }
 .card-shadow {
   box-shadow: var(--card-shadow);
