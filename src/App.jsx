@@ -113,9 +113,13 @@ export default function App() {
   /** Après la course : archive le bilan et rouvre le questionnaire pour un nouvel objectif. */
   const startNewGoal = (recap, finishMinutes, predictedMinutes) => {
     const monday = mondayOf(new Date());
+    // Volume actuel : moyenne des 4 dernières semaines de sorties, si l'app les connaît
+    const since = toISODate(addDays(new Date(), -28));
+    const recent = activities.filter((a) => a.date >= since);
+    const volume = recent.length ? { currentKm: Math.round(recent.reduce((t, a) => t + a.distanceKm, 0) / 4), currentRuns: Math.round(recent.length / 4) } : {};
     setNewGoal({
       archive: archiveEntry(recap, finishMinutes, predictedMinutes),
-      initial: { ...profile, raceName: 'Mon prochain objectif', raceDate: toISODate(addDays(monday, 7 * 11 + 6)), raceTrack: null, prepRaces: [], planStart: toISODate(monday) },
+      initial: { ...profile, ...volume, recentInjury: false, raceName: 'Mon prochain objectif', raceDate: toISODate(addDays(monday, 7 * 11 + 6)), raceTrack: null, prepRaces: [], planStart: toISODate(monday) },
     });
     setWizardOpen(true);
   };

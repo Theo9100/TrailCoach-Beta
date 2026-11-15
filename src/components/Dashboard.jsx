@@ -378,9 +378,11 @@ function SessionCard({ session, isToday, isPast, completion, activity, onToggle,
           )}
 
           {session.exercises && (
-            <Button size="sm" className="mt-3" style={{ background: 'var(--type-renfo)', color: 'rgb(var(--bg))', boxShadow: 'none' }} onClick={() => setPlayer(0)}>
-              <Play className="h-4 w-4" /> {isDone ? 'Refaire la séance guidée' : 'Lancer la séance guidée'}
-            </Button>
+            <div className="mt-3">
+              <Button size="sm" style={{ background: 'var(--type-renfo)', color: 'rgb(var(--bg))', boxShadow: 'none' }} onClick={() => setPlayer(0)}>
+                <Play className="h-4 w-4" /> {isDone ? 'Refaire la séance guidée' : 'Lancer la séance guidée'}
+              </Button>
+            </div>
           )}
           {player != null && (
             <StrengthPlayer session={session} startAt={player} alreadyDone={isDone} onComplete={onToggle} onClose={() => setPlayer(null)} />
