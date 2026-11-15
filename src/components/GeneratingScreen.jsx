@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check } from 'lucide-react';
 import { Logo, cx } from './ui';
-import { peakTargets, totalWeeksFor } from '../lib/plan';
+import { planSummary, totalWeeksFor } from '../lib/plan';
 
 const STEPS = [
   'Analyse de votre profil',
@@ -36,7 +36,7 @@ export default function GeneratingScreen({ profile, title = 'Création de votre 
   const progress = Math.min(1, elapsed / total);
   const current = Math.min(STEPS.length, Math.floor(progress * STEPS.length));
   const weeks = totalWeeksFor(profile);
-  const { peakKm, peakDPlus } = peakTargets(profile);
+  const { peakKm, peakDPlus } = planSummary(profile);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-night px-6 text-paper" role="status" aria-live="polite">

@@ -1,15 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ArrowRight, Calculator, Check, Moon, Sun } from 'lucide-react';
 import { Button, Card, Field, Logo, RangeField, Segmented, cx, inputClass } from './ui';
-import { LEVELS, PHASES, buildMacroCycle, peakTargets, totalWeeksFor, vmaFrom10k } from '../lib/plan';
+import { LEVELS, PHASES, buildMacroCycle, planSummary, totalWeeksFor, vmaFrom10k } from '../lib/plan';
+import { AgeField, CurrentVolumeFields, HealthAdvice } from './FitnessFields';
 import { addDays, daysBetween, formatLongDate, mondayOf, toISODate } from '../lib/format';
 import RaceGpxField, { trackToProfilePatch } from './RaceGpxField';
 
-const STEPS = ['Vous', 'Objectif', 'Disponibilités'];
+const STEPS = ['Vous', 'Aujourd’hui', 'Objectif', 'Disponibilités'];
+const LAST = STEPS.length - 1;
 
 export default function Onboarding({ initial, onComplete, onSkip, dark, onToggleTheme, canCancel, onCancel }) {
   const [step, setStep] = useState(0);
-  const [data, setData] = useState(() => ({ ...initial, planStart: toISODate(mondayOf(new Date())) }));
+  const [data, setData] = useState(() => ({ ...initial, currentKm: initial.currentKm ?? 20, currentRuns: initial.currentRuns ?? 3, recentInjury: !!initial.recentInjury, planStart: toISODate(mondayOf(new Date())) }));
   const [tenK, setTenK] = useState('');
   const set = (patch) => setData((d) => ({ ...d, ...patch }));
 
@@ -20,10 +22,10 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
   const dateError = !data.raceDate || dateDays < 14 ? 'La course doit avoir lieu dans au moins 2 semaines.' : dateDays > 7 * 30 ? 'Choisissez une course dans les 30 prochaines semaines.' : null;
 
   const macro = useMemo(() => (dateError ? [] : buildMacroCycle(data)), [data, dateError]);
-  const peaks = peakTargets(data);
+  const peaks = useMemo(() => (dateError ? { peakKm: 0, peakDPlus: 0, startKm: 0 } : planSummary(data)), [data, dateError]);
   const estimatedVma = vmaFrom10k(Number(tenK));
 
-  const canNext = step === 0 ? data.name.trim().length > 0 : step === 1 ? !dateError && data.raceName.trim() : true;
+  const canNext = step === 0 ? data.name.trim().length > 0 : step === 2 ? !dateError && data.raceName.trim() : true;
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -44,7 +46,7 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
             à la ligne d'arrivée.
           </h1>
           <p className="mt-4 max-w-sm text-sm text-paper/70">
-            Trois questions, et TrailCoach construit votre préparation semaine par semaine : phases, volume, dénivelé et allures calculés à partir de votre VMA.
+            Quatre étapes, et TrailCoach construit votre préparation semaine par semaine : phases, volume, dénivelé et allures calculés à partir de votre VMA et de votre forme du moment.
           </p>
         </div>
         <ol className="relative mt-8 hidden lg:flex gap-6 text-xs font-bold uppercase tracking-wider">
@@ -64,7 +66,7 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
         <div className="mx-auto w-full max-w-xl flex-1 flex flex-col">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted">
-              Étape {step + 1} / 3
+              Étape {step + 1} / {STEPS.length}
               <div className="flex gap-1">
                 {STEPS.map((s, i) => (
                   <span key={s} className={cx('h-1.5 w-8 rounded-full', i <= step ? 'bg-accent' : 'bg-line')} />
@@ -88,6 +90,7 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
                 <Field label="Prénom ou pseudo">
                   <input className={inputClass} value={data.name} placeholder="Ex. Camille" onChange={(e) => set({ name: e.target.value })} autoFocus />
                 </Field>
+                <AgeField data={data} set={set} />
                 <div>
                   <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-muted">Niveau d'expérience</span>
                   <Segmented options={LEVELS.map((l) => ({ value: l, label: l }))} value={data.level} onChange={(level) => set({ level })} />
@@ -112,11 +115,21 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
                     )}
                   </div>
                 </Card>
-                <RangeField label="FC maximale" unit="bpm" min={150} max={215} step={1} value={data.fcMax} onChange={(fcMax) => set({ fcMax })} hint="À défaut de test, comptez environ 220 − votre âge." />
+                <RangeField label="FC maximale" unit="bpm" min={150} max={215} step={1} value={data.fcMax} onChange={(fcMax) => set({ fcMax })} hint="À défaut de test, indiquez votre âge plus haut pour obtenir une estimation." />
               </>
             )}
 
             {step === 1 && (
+              <>
+                <header>
+                  <h2 className="font-display text-3xl font-black">Où en êtes-vous ?</h2>
+                  <p className="mt-1 text-sm text-muted">Le plan part de ce que vous courez réellement aujourd’hui, puis monte progressivement. C’est la meilleure protection contre les blessures.</p>
+                </header>
+                <CurrentVolumeFields data={data} set={set} />
+              </>
+            )}
+
+            {step === 2 && (
               <>
                 <header>
                   <h2 className="font-display text-3xl font-black">Votre défi</h2>
@@ -138,7 +151,7 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
               </>
             )}
 
-            {step === 2 && (
+            {step === 3 && (
               <>
                 <header>
                   <h2 className="font-display text-3xl font-black">Votre semaine type</h2>
@@ -152,8 +165,9 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
 
                 <Card className="p-5">
                   <div className="text-xs font-bold uppercase tracking-wider text-muted">Aperçu de votre préparation</div>
-                  <div className="mt-3 grid grid-cols-3 gap-3">
+                  <div className="mt-3 grid grid-cols-4 gap-3">
                     <div><div className="font-display text-2xl font-black tabular">{weeks}</div><div className="text-xs text-muted">semaines</div></div>
+                    <div><div className="font-display text-2xl font-black tabular">{peaks.startKm}</div><div className="text-xs text-muted">km en semaine 1</div></div>
                     <div><div className="font-display text-2xl font-black tabular">{peaks.peakKm}</div><div className="text-xs text-muted">km au pic</div></div>
                     <div><div className="font-display text-2xl font-black tabular text-accent">{peaks.peakDPlus}</div><div className="text-xs text-muted">m D+ au pic</div></div>
                   </div>
@@ -168,6 +182,7 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
                     ))}
                   </div>
                 </Card>
+                {!dateError && <HealthAdvice profile={data} />}
               </>
             )}
           </div>
@@ -178,7 +193,7 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
                 <ArrowLeft className="h-4 w-4" /> Retour
               </Button>
             )}
-            {step < 2 ? (
+            {step < LAST ? (
               <Button size="lg" className="flex-1" disabled={!canNext} onClick={() => setStep(step + 1)}>
                 Continuer <ArrowRight className="h-4 w-4" />
               </Button>

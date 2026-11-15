@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, RotateCcw, Save, Timer, Trash2 } from 'lucide-react';
 import { Button, Card, Field, RangeField, SectionTitle, Segmented, cx, inputClass } from './ui';
-import { LEVELS, peakTargets, totalWeeksFor, trainingZones } from '../lib/plan';
+import { LEVELS, planSummary, totalWeeksFor, trainingZones } from '../lib/plan';
+import { AgeField, CurrentVolumeFields, HealthAdvice } from './FitnessFields';
 import { addDays, daysBetween, pace, toISODate } from '../lib/format';
 import RaceGpxField, { trackToProfilePatch } from './RaceGpxField';
 import VmaTest from './VmaTest';
@@ -17,7 +18,7 @@ export default function ProfileTab({ profile, onSave, onRestartWizard, onVmaTest
   const dateDays = daysBetween(new Date(), draft.raceDate);
   const dateError = !draft.raceDate || daysBetween(draft.planStart, draft.raceDate) < 7 ? 'La course doit être après le début du programme.' : dateDays > 7 * 40 ? 'Date trop lointaine.' : null;
   const zones = trainingZones(draft);
-  const peaks = peakTargets(draft);
+  const peaks = dateError ? { peakKm: '–', peakDPlus: '–' } : planSummary(draft);
   const vma = Number(draft.vma);
 
   return (
@@ -48,10 +49,26 @@ export default function ProfileTab({ profile, onSave, onRestartWizard, onVmaTest
               <RangeField label="VMA" unit="km/h" min={9} max={22} step={0.5} value={draft.vma} onChange={(v) => set({ vma: v })} />
               <RangeField label="FC max" unit="bpm" min={150} max={215} step={1} value={draft.fcMax} onChange={(v) => set({ fcMax: v })} />
             </div>
+            <AgeField data={draft} set={set} />
             <button type="button" onClick={() => setTesting(true)} className="inline-flex items-center gap-1.5 text-xs font-bold text-accent hover:underline">
               <Timer className="h-3.5 w-3.5" /> Vous ne connaissez pas votre VMA ? Faire le test guidé de 6 minutes
             </button>
             {testing && <VmaTest currentVma={draft.vma} onApply={(v) => set({ vma: v })} onRecord={onVmaTest} onClose={() => setTesting(false)} />}
+          </Card>
+
+          <Card className="space-y-5 p-5 sm:p-6">
+            <div>
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Forme au départ</h3>
+              <p className="mt-1 text-sm text-muted">
+                {draft.currentKm == null || draft.currentKm === ''
+                  ? 'Non renseignée : le plan démarre sur un volume standard pour votre niveau. Indiquez ce que vous couriez juste avant le programme pour qu’il parte de là.'
+                  : 'Le plan part de ce volume et monte progressivement. Modifier ces valeurs recalcule toutes les semaines.'}
+              </p>
+            </div>
+            <CurrentVolumeFields data={draft} set={set} before />
+            {draft.currentKm != null && draft.currentKm !== '' && (
+              <button type="button" onClick={() => set({ currentKm: null, currentRuns: null })} className="text-xs font-bold text-muted underline-offset-2 hover:text-ink hover:underline">Ne pas en tenir compte (volume standard)</button>
+            )}
           </Card>
 
           <Card className="space-y-5 p-5 sm:p-6">
@@ -139,6 +156,12 @@ export default function ProfileTab({ profile, onSave, onRestartWizard, onVmaTest
         </form>
 
         <aside className="space-y-6">
+          {!dateError && (
+            <Card className="p-5">
+              <h3 className="mb-3 text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Conseils pour votre profil</h3>
+              <HealthAdvice profile={draft} />
+            </Card>
+          )}
           <Card className="overflow-hidden">
             <div className="border-b border-line p-5">
               <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Vos zones d'entraînement</h3>

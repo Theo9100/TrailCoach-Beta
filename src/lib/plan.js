@@ -9,7 +9,7 @@
  */
 import { addDays, clamp, daysBetween, mondayOf, pace, roundTo, toISODate, weekdayIndex } from './format';
 import { buildWorkout } from './workout';
-import { STRENGTH_STAGES, strengthRoutine, strengthStage } from './exercises';
+import { STRENGTH_STAGES, buildStrengthSteps, estimateStepsMinutes, strengthRoutine, strengthStage } from './exercises';
 
 export const LEVELS = ['Débutant', 'Intermédiaire', 'Avancé'];
 
@@ -79,11 +79,34 @@ export function currentWeekNumber(profile, today = new Date()) {
   return clamp(n, 1, totalWeeksFor(profile));
 }
 
+/**
+ * Réglages propres au coureur : volume actuel, âge, blessure récente.
+ * Ils fixent le point de départ du plan, la hausse maximale d'une semaine à l'autre
+ * et la fréquence des semaines allégées.
+ */
+export function personalSettings(profile) {
+  const filled = (v) => v != null && v !== '';
+  const age = filled(profile.age) ? Number(profile.age) : null;
+  const injury = !!profile.recentInjury;
+  const senior = age >= 60 ? 2 : age >= 50 ? 1 : 0;
+  return {
+    hasVolume: filled(profile.currentKm),
+    currentKm: Math.max(0, Number(profile.currentKm) || 0),
+    currentRuns: filled(profile.currentRuns) ? Math.max(0, Number(profile.currentRuns)) : null,
+    age,
+    injury,
+    maxIncrease: injury || senior === 2 ? 0.07 : senior === 1 ? 0.08 : 0.1,
+    peakFactor: senior === 2 ? 0.85 : senior === 1 ? 0.92 : 1,
+    shortCycle: senior > 0 || injury,
+  };
+}
+
+/** Volume et dénivelé hebdomadaires idéaux au pic, pour cette course et ce coureur. */
 export function peakTargets(profile) {
   const p = levelParams(profile.level);
   const sessions = clamp(Number(profile.sessionsPerWeek) || 4, 2, 6);
   const sessionMult = 0.7 + 0.075 * sessions;
-  const peakKm = Math.min(p.kmCap, 20 + profile.distance * 0.9) * p.mult * sessionMult;
+  const peakKm = Math.min(p.kmCap, 20 + profile.distance * 0.9) * p.mult * sessionMult * personalSettings(profile).peakFactor;
   const ratio = profile.elevation / Math.max(profile.distance, 1); // m de D+ par km de course
   const peakDPlus = clamp(peakKm * ratio * 0.9, peakKm * 12, p.dplusCap);
   return { peakKm: Math.round(peakKm), peakDPlus: roundTo(peakDPlus, 50) };
@@ -92,12 +115,20 @@ export function peakTargets(profile) {
 export function buildMacroCycle(profile) {
   const total = totalWeeksFor(profile);
   const p = levelParams(profile.level);
+  const pp = personalSettings(profile);
+  const cycle = pp.shortCycle ? Math.min(3, p.cycle) : p.cycle;
   const taper = total >= 8 ? 2 : 1;
   const build = Math.max(0, total - taper);
   const foncier = Math.max(build > 0 ? 1 : 0, Math.round(build * 0.4));
   const spec = build >= 3 ? Math.max(1, Math.round(build * 0.3)) : 0;
   const dev = Math.max(0, build - foncier - spec);
   const { peakKm, peakDPlus } = peakTargets(profile);
+
+  // Point de départ : le volume réellement couru ces dernières semaines, s'il est connu
+  const base = Math.max(pp.currentKm, 8);
+  const startShare = pp.hasVolume ? clamp((base * (pp.injury ? 1 : 1.05)) / peakKm, 0.2, 0.9) : p.start;
+  let ref = base; // dernier volume d'une semaine normale, référence de la hausse autorisée
+  let reached = 0;
 
   const weeks = [];
   for (let n = 1; n <= total; n += 1) {
@@ -109,12 +140,22 @@ export function buildMacroCycle(profile) {
 
     let load;
     let isRecovery = false;
+    let capped = false;
     if (phase === 'affutage') {
-      load = n === total ? 0.35 : 0.65;
+      load = (n === total ? 0.35 : 0.65) * (pp.hasVolume && reached > 0 ? reached / peakKm : 1);
     } else {
       const t = build > 1 ? (n - 1) / (build - 1) : 1;
-      load = p.start + (1 - p.start) * Math.pow(t, 0.9);
-      isRecovery = n % p.cycle === 0 && n < build;
+      load = startShare + (1 - startShare) * Math.pow(t, 0.9);
+      isRecovery = n % cycle === 0 && n < build;
+      if (pp.hasVolume) {
+        // Hausse plafonnée d'une semaine normale à la suivante (au moins 3 km, pour les petits volumes)
+        const allowed = n === 1 && pp.injury ? base : Math.max(ref * (1 + pp.maxIncrease), ref + 3);
+        const km = Math.min(peakKm * load, allowed);
+        capped = km < peakKm * load - 0.5;
+        load = km / peakKm;
+        if (!isRecovery) ref = km;
+        reached = Math.max(reached, km);
+      }
       if (isRecovery) load *= 0.72;
     }
 
@@ -124,6 +165,7 @@ export function buildMacroCycle(profile) {
       phase,
       isRecovery,
       isRaceWeek: n === total,
+      capped,
       load,
       plannedKm: Math.round(peakKm * load),
       plannedDPlus: roundTo(peakDPlus * load, 10),
@@ -139,6 +181,50 @@ export function buildMacroCycle(profile) {
   });
 
   return weeks;
+}
+
+/** Résumé du plan : pic réellement atteint, pic idéal, et s'il est limité par le volume de départ. */
+export function planSummary(profile) {
+  const ideal = peakTargets(profile);
+  const pp = personalSettings(profile);
+  const weeks = buildMacroCycle(profile);
+  const peakKm = Math.max(...weeks.map((w) => w.plannedKm));
+  const peakDPlus = Math.max(...weeks.map((w) => w.plannedDPlus));
+  return {
+    peakKm,
+    peakDPlus,
+    idealKm: ideal.peakKm,
+    startKm: weeks[0].plannedKm,
+    personalised: pp.hasVolume,
+    limited: pp.hasVolume && peakKm < ideal.peakKm * 0.9,
+    maxIncrease: pp.maxIncrease,
+  };
+}
+
+/** Mises en garde et conseils liés au profil (âge, blessure, écart entre volume actuel et objectif). */
+export function healthAdvice(profile) {
+  const pp = personalSettings(profile);
+  const out = [];
+  const sum = planSummary(profile);
+  if (sum.limited) {
+    out.push({ tone: 'warn', text: `Avec ${pp.currentKm} km par semaine aujourd’hui et ${totalWeeksFor(profile)} semaines devant vous, le plan plafonne à ${sum.peakKm} km par semaine au lieu des ${sum.idealKm} km conseillés pour cette course. L’objectif raisonnable est de finir, sans viser un temps. Une course plus courte ou plus tardive serait plus sûre.` });
+  }
+  if (pp.currentRuns != null && Number(profile.sessionsPerWeek) > pp.currentRuns + 1) {
+    out.push({ tone: 'info', text: `Vous passez de ${pp.currentRuns} à ${profile.sessionsPerWeek} séances par semaine : le plan en ajoute une toutes les 2 semaines plutôt que tout d’un coup.` });
+  }
+  if (pp.injury) {
+    out.push({ tone: 'warn', text: 'Blessure ou arrêt récent : les 2 premières semaines se font sans fractionné ni côtes, et le volume monte plus lentement. Reprenez avec l’accord de votre médecin ou kiné, et arrêtez-vous si la douleur revient.' });
+  }
+  if (pp.age != null && pp.age < 18) {
+    out.push({ tone: 'warn', text: 'Ce programme est conçu pour des adultes. Avant 18 ans, l’entraînement doit être encadré par un entraîneur de club.' });
+  } else if (pp.age >= 60) {
+    out.push({ tone: 'info', text: 'Après 60 ans, la récupération est plus lente : le plan allège une semaine sur trois, monte de 7 % par semaine au maximum et vise un pic un peu plus bas. Un bilan médical avec test d’effort est vivement conseillé.' });
+  } else if (pp.age >= 50) {
+    out.push({ tone: 'info', text: 'Après 50 ans, la récupération est plus lente : le plan allège une semaine sur trois et monte de 8 % par semaine au maximum. Un bilan médical avant de commencer est conseillé.' });
+  } else if (pp.age >= 40 && (profile.level === 'Débutant' || (pp.hasVolume && pp.currentKm < 10))) {
+    out.push({ tone: 'info', text: 'Après 40 ans, en débutant ou en reprenant la course, un bilan médical avant de commencer est conseillé.' });
+  }
+  return out;
 }
 
 /* ---------------------------------------------------------------- */
@@ -330,7 +416,10 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts
   const vma = Number(profile.vma) || 14;
   const fc = Number(profile.fcMax) || 185;
   const longDay = Number(profile.longRunDay) === 5 ? 5 : 6;
-  const count = clamp(Number(profile.sessionsPerWeek) || 4, 2, 6);
+  const pp = personalSettings(profile);
+  const wanted = clamp(Number(profile.sessionsPerWeek) || 4, 2, 6);
+  // Si le coureur sort moins souvent aujourd'hui, on ajoute une séance toutes les 2 semaines
+  const count = pp.currentRuns != null ? Math.min(wanted, Math.max(2, pp.currentRuns + 1 + Math.floor((meta.number - 1) / 2))) : wanted;
   const ultra = profile.distance >= 60;
 
   let slots = SLOTS[longDay][count].map(([day, code]) => ({ day, type: resolveSlotType(code, meta.number, profile.level) }));
@@ -344,6 +433,11 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts
       .map((s) => ({ ...s, type: s.type === 'COTES' ? 'EF' : s.type }));
   }
 
+  // Reprise après blessure : deux semaines sans fractionné ni côtes
+  const lowStart = pp.hasVolume && pp.currentKm < 15 && meta.number <= 2 && !meta.isRaceWeek; // petit volume : on commence en endurance
+  const easyReturn = (pp.injury || lowStart) && meta.number <= 2 && !meta.isRaceWeek;
+  if (easyReturn) slots = slots.map((s) => ({ ...s, type: s.type === 'VMA' || s.type === 'COTES' ? 'EF' : s.type }));
+
   // Ajustement « épuisé » : plus aucune intensité.
   if (adj.intensity === 0) {
     slots = slots.map((s) => ({ ...s, type: s.type === 'LONG' ? 'EF' : s.type === 'EF' ? 'EF' : 'RECUP' }));
@@ -356,6 +450,10 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts
   const prep = meta.isRaceWeek ? null : prepRaces.find((r) => r.date >= meta.startDate && r.date <= weekEnd) || null;
   const afterPrep = meta.isRaceWeek ? null : prepRaces.find((r) => r.date >= prevStart && r.date < meta.startDate) || null;
   const notes = [];
+  if (meta.number === 1 && pp.hasVolume) {
+    notes.push({ kind: 'start', text: `${pp.currentKm > 0 ? `Plan calé sur vos ${pp.currentKm} km par semaine actuels` : 'Vous partez de zéro, le plan démarre tout doucement'} : le volume monte d’environ ${Math.round(pp.maxIncrease * 100)} % par semaine au maximum${count < wanted ? `, et les séances passent progressivement de ${count} à ${wanted} par semaine` : ''}${lowStart && !pp.injury ? '. Les 2 premières semaines se font uniquement en endurance' : ''}.` });
+  }
+  if (easyReturn && pp.injury) notes.push({ kind: 'start', text: 'Reprise après blessure : semaine sans fractionné ni côtes. Arrêtez la séance si la douleur revient.' });
   let extra = 1;
   if (prep) { extra *= 0.8; notes.push({ kind: 'prep', text: `Course de préparation « ${prep.name} » cette semaine : charge réduite de 20 % et veille au repos.` }); }
   if (afterPrep) { extra *= 0.85; notes.push({ kind: 'prep', text: `Récupération après « ${afterPrep.name} » : charge réduite de 15 %.` }); }
@@ -369,12 +467,14 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts
   const kmWeightSum = slots.reduce((s, x) => s + KM_WEIGHTS[x.type], 0) || 1;
   const dpWeightSum = slots.reduce((s, x) => s + DPLUS_WEIGHTS[x.type], 0) || 1;
   const longCap = clamp(profile.distance * 0.65, 14, p.longCap);
+  // Pour les petits volumes, les distances minimales par séance sont réduites (jusqu'à moitié)
+  const minScale = clamp(weeklyKm / (slots.reduce((t, x) => t + MIN_KM[x.type], 0) || 1), 0.5, 1) * (meta.isRaceWeek ? 0.7 : 1);
 
   const sessions = slots.map((slot) => {
     const type = slot.type;
     let km = (weeklyKm * KM_WEIGHTS[type]) / kmWeightSum;
     if (type === 'LONG') km = Math.min(km, longCap);
-    km = Math.max(MIN_KM[type] * (meta.isRaceWeek ? 0.7 : 1), roundTo(km, 0.5));
+    km = Math.max(roundTo(MIN_KM[type] * minScale, 0.5), roundTo(km, 0.5));
     const dplus = roundTo((weeklyDPlus * DPLUS_WEIGHTS[type]) / dpWeightSum, 10);
     const effortKm = km + dplus / 100;
     const durationMin = roundTo((effortKm / (vma * SPEED_FACTOR[type])) * 60, 5);
@@ -472,13 +572,14 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts
       type: 'RENFO',
       km: 0,
       dplus: 0,
-      durationMin: meta.phase === 'affutage' ? 15 : routine.stage === 2 ? 30 : 25,
+      durationMin: Math.max(10, roundTo(estimateStepsMinutes(buildStrengthSteps(routine.items, { light: meta.phase === 'affutage' })), 5)),
+      light: meta.phase === 'affutage',
       title: routine.title,
       zone: routine.stage != null ? `${STRENGTH_STAGES[routine.stage].label} · ${STRENGTH_STAGES[routine.stage].hint}` : 'Sans impact',
       stage: routine.stage,
       exercises: routine.items,
       steps: [
-        { label: 'Déroulé', detail: 'Enchaîner les exercices avec 45 s de récupération entre les séries. Privilégier la qualité du geste à la vitesse.' },
+        { label: 'Déroulé', detail: 'Enchaîner les exercices avec 45 s de récupération entre les séries (30 s en affûtage). Privilégier la qualité du geste à la vitesse. La séance guidée gère les enchaînements et les chronos pour vous.' },
         ...(routine.stage > 0 ? [{ label: 'Progression', detail: 'Exercices exigeants : si un mouvement n’est pas encore maîtrisé, revenez à sa version simple (squat, fente, planche) le temps de progresser.' }] : []),
       ],
     });
