@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Flag, Loader2, Mountain, MoveRight, Route, Send, Share2, Sparkles, Timer, Watch } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, Flag, Loader2, Mountain, MoveRight, Play, Route, Send, Share2, Sparkles, Timer, Watch } from 'lucide-react';
 import { Button, Card, ProgressBar, SectionTitle, Segmented, Stat, TypeChip, cx } from './ui';
 import { ADJUSTMENTS, PHASES, SESSION_TYPES } from '../lib/plan';
 import { fingerprint, sendableSessions } from '../lib/intervals';
@@ -9,6 +9,7 @@ import { CourseProfile, courseSummary } from './RaceGpxField';
 import ExerciseFigure from './ExerciseFigure';
 import RaceDay from './RaceDay';
 import VmaTest from './VmaTest';
+import StrengthPlayer from './StrengthPlayer';
 import Recap, { PastPreparations } from './Recap';
 import ShareModal from './ShareModal';
 import { recapCard, sessionCard, weekCard } from '../lib/sharecard';
@@ -306,6 +307,7 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
 function SessionCard({ session, isToday, isPast, completion, activity, onToggle, vma, weekStart, onMove, onFeedback, onShare }) {
   const [open, setOpen] = useState(isToday);
   const [moving, setMoving] = useState(false);
+  const [player, setPlayer] = useState(null); // index de l'exercice de départ de la séance guidée
   const movable = !['COURSE', 'PREPA'].includes(session.type) && !completion?.done;
   const info = SESSION_TYPES[session.type];
   const isDone = !!completion?.done;
@@ -375,15 +377,26 @@ function SessionCard({ session, isToday, isPast, completion, activity, onToggle,
             </div>
           )}
 
+          {session.exercises && (
+            <Button size="sm" className="mt-3" style={{ background: 'var(--type-renfo)', color: 'rgb(var(--bg))', boxShadow: 'none' }} onClick={() => setPlayer(0)}>
+              <Play className="h-4 w-4" /> {isDone ? 'Refaire la séance guidée' : 'Lancer la séance guidée'}
+            </Button>
+          )}
+          {player != null && (
+            <StrengthPlayer session={session} startAt={player} alreadyDone={isDone} onComplete={onToggle} onClose={() => setPlayer(null)} />
+          )}
+
           {open && session.exercises && (
-            <ul className="rise mt-4 space-y-3 border-t border-line pt-3">
-              {session.exercises.map((e) => (
-                <li key={e.id} className="flex items-center gap-3">
-                  <ExerciseFigure id={e.id} size={104} />
-                  <div className="min-w-0">
-                    <div className="text-sm font-extrabold">{EXERCISES[e.id].name} <span className="ml-1 font-bold tabular" style={{ color: 'var(--type-renfo)' }}>{e.dose}</span></div>
-                    <div className="text-xs leading-relaxed text-muted">{EXERCISES[e.id].cue}</div>
-                  </div>
+            <ul className="rise mt-4 space-y-2 border-t border-line pt-3">
+              {session.exercises.map((e, i) => (
+                <li key={e.id}>
+                  <button onClick={() => setPlayer(i)} className="-mx-1.5 flex w-[calc(100%+0.75rem)] items-center gap-3 rounded-xl p-1.5 text-left transition hover:bg-sunken/60" title="Démarrer la séance guidée à cet exercice">
+                    <ExerciseFigure id={e.id} size={104} />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-extrabold">{EXERCISES[e.id].name} <span className="ml-1 font-bold tabular" style={{ color: 'var(--type-renfo)' }}>{e.dose}</span></span>
+                      <span className="block text-xs leading-relaxed text-muted">{EXERCISES[e.id].cue}</span>
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>

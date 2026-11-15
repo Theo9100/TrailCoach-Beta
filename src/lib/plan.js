@@ -9,7 +9,7 @@
  */
 import { addDays, clamp, daysBetween, mondayOf, pace, roundTo, toISODate, weekdayIndex } from './format';
 import { buildWorkout } from './workout';
-import { STRENGTH_STAGES, strengthRoutine, strengthStage } from './exercises';
+import { STRENGTH_STAGES, buildStrengthSteps, estimateStepsMinutes, strengthRoutine, strengthStage } from './exercises';
 
 export const LEVELS = ['Débutant', 'Intermédiaire', 'Avancé'];
 
@@ -472,13 +472,14 @@ export function generateWeek(profile, weekNumber, adjustmentKey = 'normal', opts
       type: 'RENFO',
       km: 0,
       dplus: 0,
-      durationMin: meta.phase === 'affutage' ? 15 : routine.stage === 2 ? 30 : 25,
+      durationMin: Math.max(10, roundTo(estimateStepsMinutes(buildStrengthSteps(routine.items, { light: meta.phase === 'affutage' })), 5)),
+      light: meta.phase === 'affutage',
       title: routine.title,
       zone: routine.stage != null ? `${STRENGTH_STAGES[routine.stage].label} · ${STRENGTH_STAGES[routine.stage].hint}` : 'Sans impact',
       stage: routine.stage,
       exercises: routine.items,
       steps: [
-        { label: 'Déroulé', detail: 'Enchaîner les exercices avec 45 s de récupération entre les séries. Privilégier la qualité du geste à la vitesse.' },
+        { label: 'Déroulé', detail: 'Enchaîner les exercices avec 45 s de récupération entre les séries (30 s en affûtage). Privilégier la qualité du geste à la vitesse. La séance guidée gère les enchaînements et les chronos pour vous.' },
         ...(routine.stage > 0 ? [{ label: 'Progression', detail: 'Exercices exigeants : si un mouvement n’est pas encore maîtrisé, revenez à sa version simple (squat, fente, planche) le temps de progresser.' }] : []),
       ],
     });
