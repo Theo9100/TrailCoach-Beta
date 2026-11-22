@@ -3,10 +3,12 @@ import { Download, Laptop, Moon, Sun, Trash2, Upload } from 'lucide-react';
 import { Button, Card, SectionTitle, cx } from './ui';
 import { clearAll, exportAll, importAll } from '../lib/storage';
 import WatchCard from './WatchCard';
+import AccountCard, { useCloud } from './AccountCard';
 
 export default function SettingsTab({ theme, setTheme, stats, intervals, setIntervals, onSendPlan }) {
   const fileRef = useRef(null);
   const [message, setMessage] = useState(null);
+  const cloud = useCloud();
 
   const download = () => {
     const blob = new Blob([JSON.stringify(exportAll(), null, 2)], { type: 'application/json' });
@@ -38,6 +40,8 @@ export default function SettingsTab({ theme, setTheme, stats, intervals, setInte
     <div className="mx-auto max-w-2xl space-y-6">
       <SectionTitle eyebrow="Préférences & données" title="Réglages" />
 
+      <AccountCard />
+
       <WatchCard intervals={intervals} setIntervals={setIntervals} onSendPlan={onSendPlan} />
 
       <Card className="p-5 sm:p-6">
@@ -60,7 +64,7 @@ export default function SettingsTab({ theme, setTheme, stats, intervals, setInte
       <Card className="p-5 sm:p-6">
         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Vos données</h3>
         <p className="mt-2 text-sm text-muted">
-          Tout est enregistré uniquement dans ce navigateur ({stats.activities} activité{stats.activities > 1 ? 's' : ''}, {stats.completed} séance{stats.completed > 1 ? 's' : ''} validée{stats.completed > 1 ? 's' : ''}). Exportez une sauvegarde pour changer d'appareil.
+          {cloud.user ? 'Enregistré sur cet appareil et sauvegardé sur votre compte' : 'Tout est enregistré uniquement dans ce navigateur'} ({stats.activities} activité{stats.activities > 1 ? 's' : ''}, {stats.completed} séance{stats.completed > 1 ? 's' : ''} validée{stats.completed > 1 ? 's' : ''}). {cloud.user ? 'Vous pouvez aussi exporter un fichier de sauvegarde.' : 'Connectez-vous ou exportez une sauvegarde pour changer d’appareil.'}
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Button variant="ghost" onClick={download}><Download className="h-4 w-4" /> Exporter</Button>
@@ -72,7 +76,7 @@ export default function SettingsTab({ theme, setTheme, stats, intervals, setInte
 
       <Card className="p-5 sm:p-6">
         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--type-vma)' }}>Zone de danger</h3>
-        <p className="mt-2 text-sm text-muted">Supprime le profil, le programme, les séances validées et les activités importées.</p>
+        <p className="mt-2 text-sm text-muted">Supprime le profil, le programme, les séances validées et les activités importées de ce navigateur{cloud.user ? ', et vous déconnecte. La copie en ligne est conservée : pour l’effacer aussi, supprimez votre compte' : ''}.</p>
         <Button
           variant="danger"
           className="mt-4"

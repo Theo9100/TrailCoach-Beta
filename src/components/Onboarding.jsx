@@ -9,7 +9,7 @@ import RaceGpxField, { trackToProfilePatch } from './RaceGpxField';
 const STEPS = ['Vous', 'Aujourd’hui', 'Objectif', 'Disponibilités'];
 const LAST = STEPS.length - 1;
 
-export default function Onboarding({ initial, onComplete, onSkip, dark, onToggleTheme, canCancel, onCancel }) {
+export default function Onboarding({ initial, onComplete, onSkip, dark, onToggleTheme, canCancel, onCancel, onLogin }) {
   const [step, setStep] = useState(0);
   const [data, setData] = useState(() => ({ ...initial, currentKm: initial.currentKm ?? 20, currentRuns: initial.currentRuns ?? 3, recentInjury: !!initial.recentInjury, planStart: toISODate(mondayOf(new Date())) }));
   const [tenK, setTenK] = useState('');
@@ -73,11 +73,14 @@ export default function Onboarding({ initial, onComplete, onSkip, dark, onToggle
                 ))}
               </div>
             </div>
-            {canCancel ? (
-              <Button variant="ghost" size="sm" onClick={onCancel}>Annuler</Button>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={onSkip}>Passer</Button>
-            )}
+            <div className="flex items-center gap-2">
+              {onLogin && step === 0 && <Button variant="subtle" size="sm" className="whitespace-nowrap" onClick={onLogin}>Se connecter</Button>}
+              {canCancel ? (
+                <Button variant="ghost" size="sm" onClick={onCancel}>Annuler</Button>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={onSkip}>Passer</Button>
+              )}
+            </div>
           </div>
 
           <div key={step} className="rise mt-8 flex-1 space-y-6">

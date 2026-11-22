@@ -15,6 +15,7 @@ Application web de préparation trail : un programme d'entraînement sur mesure,
 - **Carte de partage** : image d'une semaine, d'une séance ou du bilan, à publier sur Strava ou Instagram.
 - **Tracé de la course** : import facultatif du GPX du parcours dans le questionnaire ou le profil (distance et D+ remplis automatiquement, profil et montées analysés).
 - **Profil** : modification du profil (le programme se recalcule) et zones d'entraînement personnalisées.
+- **Compte** : connexion par e-mail (lien ou code, sans mot de passe) et sauvegarde automatique en ligne, pour retrouver son programme sur tous ses appareils. Facultatif : l'app reste utilisable sans compte.
 - **Réglages** : guide animé pour relier la montre via Intervals.icu, thème clair/sombre/système, export et restauration des données, réinitialisation.
 
 ## Envoi des séances sur la montre
@@ -30,6 +31,18 @@ Une fois connecté, TrailCoach récupère aussi les sorties course/trail/rando (
 Les appels passent par la fonction Vercel `api/intervals.js`, un simple relais qui évite les blocages CORS du navigateur. La clé reste dans le navigateur de l'utilisateur et n'est jamais stockée côté serveur.
 
 Les données sont stockées dans le navigateur (`localStorage`).
+
+## Sauvegarde en ligne (Supabase)
+
+Facultative : sans configuration, l'app fonctionne comme avant, tout reste dans le navigateur.
+
+1. Créer un projet sur [supabase.com](https://supabase.com) (région Europe).
+2. SQL Editor → coller le contenu de `supabase/schema.sql` → Run. Le script crée la table `user_data`, les règles « chacun ne voit que ses données » et la fonction de suppression de compte.
+3. Authentication → URL Configuration : mettre l'adresse de l'app (ex. `https://trailcoach.vercel.app`) dans « Site URL » et l'ajouter aux « Redirect URLs ».
+4. Authentication → Emails → modèle « Magic Link » : ajouter le code `{{ .Token }}` au message, pour pouvoir se connecter avec le code dans l'app installée sur iPhone (le lien s'y ouvre dans Safari, pas dans l'app).
+5. Vercel → Settings → Environment Variables : `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (voir `.env.example`), puis redéployer.
+
+Fonctionnement : chaque modification est enregistrée sur l'appareil puis envoyée 1,5 s plus tard. À l'ouverture, au retour du réseau et quand l'app revient au premier plan, les blocs modifiés ailleurs sont récupérés ; en cas de modification des deux côtés, la plus récente l'emporte. La clé API Intervals.icu, le thème et l'onglet ouvert ne quittent jamais l'appareil.
 
 ## Développement
 
@@ -54,7 +67,9 @@ src/
   lib/raceplan.js    plan de course, nutrition, estimation affinée par les sorties
   lib/recap.js       bilan de fin de préparation
   lib/sharecard.js   dessin des cartes de partage (canvas)
-  lib/storage.js     persistance localStorage, export/import
+  lib/storage.js     persistance localStorage, export/import, suivi des modifications à envoyer
+  lib/cloud.js       compte et synchronisation en ligne (Supabase)
+supabase/schema.sql  table, règles d'accès et suppression de compte, à exécuter dans Supabase
   lib/format.js      dates, allures, durées
   components/        onglets et composants d'interface
 ```

@@ -33,7 +33,7 @@ export default function GeneratingScreen({ profile, title = 'Création de votre 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const progress = Math.min(1, elapsed / total);
+  const progress = Math.min(1, Math.max(0, elapsed / total));
   const current = Math.min(STEPS.length, Math.floor(progress * STEPS.length));
   const weeks = totalWeeksFor(profile);
   const { peakKm, peakDPlus } = planSummary(profile);

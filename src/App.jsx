@@ -13,6 +13,8 @@ import { fetchActivities, fingerprint, pushSessions } from './lib/intervals';
 import { toISODate } from './lib/format';
 import { computeLoadMods, fatigueSignal } from './lib/adapt';
 import { archiveEntry } from './lib/recap';
+import { cloudConfigured, startCloud } from './lib/cloud';
+import { CloudBadge, ConflictDialog, LoginDialog } from './components/AccountCard';
 import { addDays, mondayOf } from './lib/format';
 import GlassTabBar from './components/GlassTabBar';
 import { defaultProfile, migrateLegacyProfile, usePersistentState } from './lib/storage';
@@ -64,7 +66,8 @@ export default function App() {
   const [vmaTests, setVmaTests] = usePersistentState('vmaTests', []); // [{ at, distance, vma }], du plus récent au plus ancien
   const [raceResult, setRaceResult] = usePersistentState('raceResult', null); // { minutes }
   const [history, setHistory] = usePersistentState('history', []); // préparations terminées
-  const [newGoal, setNewGoal] = useState(null); // { initial, archive } pendant le questionnaire « nouvel objectif »
+  const [newGoal, setNewGoal] = useState(null);
+  const [loginOpen, setLoginOpen] = useState(false); // connexion depuis le questionnaire (nouvel appareil) // { initial, archive } pendant le questionnaire « nouvel objectif »
 
   const todayWeek = profile ? currentWeekNumber(profile) : 1;
   const plan = useMemo(() => {
@@ -80,6 +83,7 @@ export default function App() {
   const activitiesById = useMemo(() => Object.fromEntries(activities.map((a) => [a.id, a])), [activities]);
 
   useEffect(() => { window.scrollTo({ top: 0 }); }, [tab]);
+  useEffect(() => { startCloud(); }, []);
 
   /* ------------------------------ actions ------------------------------ */
 
@@ -240,6 +244,7 @@ export default function App() {
 
   if (!profile || wizardOpen) {
     return (
+      <>
       <Onboarding
         key={newGoal ? 'new-goal' : 'wizard'}
         initial={newGoal?.initial || profile || defaultProfile()}
@@ -249,7 +254,11 @@ export default function App() {
         onCancel={() => { setWizardOpen(false); setNewGoal(null); }}
         dark={dark}
         onToggleTheme={() => setTheme(dark ? 'light' : 'dark')}
+        onLogin={!profile && cloudConfigured ? () => setLoginOpen(true) : null}
       />
+      {loginOpen && <LoginDialog onClose={() => setLoginOpen(false)} />}
+      <ConflictDialog />
+      </>
     );
   }
 
@@ -260,6 +269,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <Logo />
             <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-accent">Beta</span>
+            <CloudBadge />
           </div>
           <nav className="hidden items-center gap-1 rounded-xl bg-ink/[0.06] p-1 md:flex" aria-label="Navigation principale">
             {TABS.map((t) => (
@@ -348,6 +358,7 @@ export default function App() {
       </main>
 
       <GlassTabBar tabs={TABS} active={tab} onChange={setTab} />
+      <ConflictDialog />
     </div>
   );
 }
