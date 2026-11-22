@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
-import { Cloud, CloudOff, Loader2, LogOut, Mail, RefreshCw, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { Cloud, CloudOff, Eye, EyeOff, KeyRound, Loader2, LogIn, LogOut, MailCheck, RefreshCw, ShieldCheck, Smartphone, Trash2, UserPlus } from 'lucide-react';
 import { Button, Card, Field, Overlay, cx, inputClass } from './ui';
-import { cloudConfigured, deleteAccount, getCloudState, resolveConflict, sendLoginEmail, signOut, subscribeCloud, syncNow, verifyLoginCode } from '../lib/cloud';
+import { cloudConfigured, deleteAccount, dismissRecovery, getCloudState, resendConfirmation, resolveConflict, sendPasswordReset, signIn, signOut, signUp, subscribeCloud, syncNow, updatePassword } from '../lib/cloud';
 import { formatShortDate } from '../lib/format';
 
 export function useCloud() {
@@ -32,21 +32,123 @@ export function CloudBadge() {
   );
 }
 
-export default function AccountCard() {
-  const c = useCloud();
+/** Champ mot de passe avec bouton afficher / masquer. */
+function PasswordInput({ value, onChange, autoComplete, placeholder = '8 caractères minimum' }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input type={show ? 'text' : 'password'} autoComplete={autoComplete} required minLength={8} className={cx(inputClass, 'pr-11')} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <button type="button" onClick={() => setShow(!show)} className="absolute inset-y-0 right-0 grid w-11 place-items-center text-muted hover:text-ink" aria-label={show ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}>
+        {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
+}
+
+/** Formulaire de connexion, de création de compte et de mot de passe oublié. */
+function SignInForm() {
+  const [mode, setMode] = useState('login'); // login | signup | forgot
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(null); // adresse à laquelle l'e-mail a été envoyé
-  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null); // { kind: 'confirm' | 'reset', email }
   const [cooldown, setCooldown] = useState(0);
-  const [, tick] = useState(0);
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
     const t = setTimeout(() => setCooldown((v) => v - 1), 1000);
     return () => clearTimeout(t);
   }, [cooldown]);
+
+  const run = async (fn) => {
+    setBusy(true); setError(null);
+    try { await fn(); } catch (e) { setError(e.message); }
+    setBusy(false);
+  };
+  const switchMode = (m) => { setMode(m); setError(null); setNotice(null); };
+  const tooShort = mode !== 'forgot' && password.length > 0 && password.length < 8;
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    if (mode === 'forgot') {
+      run(async () => { await sendPasswordReset(email); setNotice({ kind: 'reset', email: email.trim() }); setCooldown(60); });
+    } else if (password.length >= 8) {
+      if (mode === 'login') run(() => signIn(email, password));
+      else run(async () => { const r = await signUp(email, password); if (!r.confirmed) { setNotice({ kind: 'confirm', email: email.trim() }); setCooldown(60); } });
+    }
+  };
+
+  if (notice) {
+    const confirm = notice.kind === 'confirm';
+    return (
+      <div className="mt-5 space-y-3">
+        <div className="flex items-start gap-3 rounded-xl bg-sunken/60 p-4 text-sm leading-relaxed">
+          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+          <div>
+            <div className="font-extrabold">{confirm ? 'Confirmez votre adresse' : 'E-mail envoyé'}</div>
+            {confirm
+              ? <>Un e-mail a été envoyé à <span className="font-bold">{notice.email}</span>. Touchez le lien qu’il contient pour activer votre compte, puis revenez ici et connectez-vous avec votre mot de passe. Pensez à regarder dans les indésirables.</>
+              : <>Si un compte existe pour <span className="font-bold">{notice.email}</span>, vous allez recevoir un lien pour choisir un nouveau mot de passe. Ensuite, revenez ici et connectez-vous avec ce nouveau mot de passe.</>}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => { setNotice(null); setMode('login'); setError(null); }}><LogIn className="h-4 w-4" /> Se connecter</Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={cooldown > 0 || busy}
+            onClick={() => run(async () => { if (confirm) await resendConfirmation(notice.email); else await sendPasswordReset(notice.email); setCooldown(60); })}
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {cooldown > 0 ? `Renvoyer l’e-mail (${cooldown} s)` : 'Renvoyer l’e-mail'}
+          </Button>
+        </div>
+        {error && <p className="text-sm font-semibold" style={{ color: 'var(--type-vma)' }}>{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <form className="mt-5 space-y-3" onSubmit={submit}>
+      {mode !== 'forgot' && (
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-sunken p-1" role="tablist" aria-label="Connexion ou création de compte">
+          {[['login', 'Se connecter'], ['signup', 'Créer un compte']].map(([m, label]) => (
+            <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => switchMode(m)} className={cx('rounded-lg px-2 py-2 text-xs font-bold transition', mode === m ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink')}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {mode === 'forgot' && <p className="text-sm text-muted">Indiquez votre adresse : vous recevrez un lien pour choisir un nouveau mot de passe.</p>}
+      <Field label="Adresse e-mail">
+        <input type="email" inputMode="email" autoComplete="username" required className={inputClass} value={email} onChange={(e) => { setEmail(e.target.value); setError(null); }} placeholder="vous@exemple.fr" />
+      </Field>
+      {mode !== 'forgot' && (
+        <Field label={mode === 'signup' ? 'Choisissez un mot de passe' : 'Mot de passe'} hint={tooShort ? '8 caractères minimum.' : mode === 'signup' ? '8 caractères minimum. Votre gestionnaire de mots de passe peut le retenir pour vous.' : null}>
+          <PasswordInput value={password} onChange={(v) => { setPassword(v); setError(null); }} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} placeholder={mode === 'signup' ? '8 caractères minimum' : 'Votre mot de passe'} />
+        </Field>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={busy || !email.trim() || (mode !== 'forgot' && password.length < 8)}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === 'login' ? <LogIn className="h-4 w-4" /> : mode === 'signup' ? <UserPlus className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}
+          {mode === 'login' ? 'Se connecter' : mode === 'signup' ? 'Créer mon compte' : 'Recevoir le lien'}
+        </Button>
+        {mode === 'login' && <button type="button" onClick={() => switchMode('forgot')} className="text-xs font-bold text-muted hover:text-ink">Mot de passe oublié ?</button>}
+        {mode === 'forgot' && <button type="button" onClick={() => switchMode('login')} className="text-xs font-bold text-muted hover:text-ink">Retour à la connexion</button>}
+      </div>
+      {error && <p className="text-sm font-semibold" style={{ color: 'var(--type-vma)' }}>{error}</p>}
+    </form>
+  );
+}
+
+export default function AccountCard() {
+  const c = useCloud();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [changing, setChanging] = useState(false);
+  const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((v) => v + 1), 30000); return () => clearInterval(t); }, []);
 
   const run = async (fn) => {
@@ -54,7 +156,6 @@ export default function AccountCard() {
     try { await fn(); } catch (e) { setError(e.message); }
     setBusy(false);
   };
-  const send = (addr) => run(async () => { await sendLoginEmail(addr); setSent(addr.trim()); setCode(''); setCooldown(60); });
 
   const head = (
     <div className="flex items-center gap-3">
@@ -83,43 +184,10 @@ export default function AccountCard() {
     return (
       <Card className="p-5 sm:p-6">
         {head}
-        {!sent ? (
-          <form className="mt-5 space-y-3" onSubmit={(e) => { e.preventDefault(); if (email.trim()) send(email); }}>
-            <p className="text-sm text-muted">Connectez-vous avec votre adresse e-mail, sans mot de passe : vous recevez un lien et un code de connexion. Ensuite, chaque modification est sauvegardée automatiquement.</p>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-              <div className="flex-1">
-                <Field label="Adresse e-mail">
-                  <input type="email" inputMode="email" autoComplete="email" required className={inputClass} value={email} onChange={(e) => { setEmail(e.target.value); setError(null); }} placeholder="vous@exemple.fr" />
-                </Field>
-              </div>
-              <Button type="submit" disabled={busy || !email.trim()}>
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Recevoir le lien
-              </Button>
-            </div>
-          </form>
-        ) : (
-          <div className="mt-5 space-y-3">
-            <div className="rounded-xl bg-sunken/60 p-3.5 text-sm leading-relaxed">
-              E-mail envoyé à <span className="font-bold">{sent}</span>. Ouvrez-le et touchez le lien, <span className="font-bold">ou</span> saisissez ci-dessous le code à 6 chiffres. Pensez à regarder dans les indésirables.
-            </div>
-            <form className="flex flex-col gap-3 sm:flex-row sm:items-end" onSubmit={(e) => { e.preventDefault(); if (code.trim().length >= 6) run(() => verifyLoginCode(sent, code)); }}>
-              <div className="flex-1">
-                <Field label="Code reçu par e-mail">
-                  <input inputMode="numeric" autoComplete="one-time-code" maxLength={10} className={cx(inputClass, 'text-center font-mono text-lg tracking-[0.4em]')} value={code} onChange={(e) => { setCode(e.target.value.replace(/\D/g, '')); setError(null); }} placeholder="••••••" />
-                </Field>
-              </div>
-              <Button type="submit" disabled={busy || code.trim().length < 6}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Valider</Button>
-            </form>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-bold text-muted">
-              <button type="button" disabled={cooldown > 0 || busy} onClick={() => send(sent)} className="hover:text-ink disabled:opacity-50">{cooldown > 0 ? `Renvoyer l’e-mail (${cooldown} s)` : 'Renvoyer l’e-mail'}</button>
-              <button type="button" onClick={() => { setSent(null); setError(null); }} className="hover:text-ink">Changer d’adresse</button>
-            </div>
-          </div>
-        )}
-        {error && <p className="mt-3 text-sm font-semibold" style={{ color: 'var(--type-vma)' }}>{error}</p>}
+        <SignInForm />
         <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted">
           <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          Sont sauvegardés : profil, programme, séances validées, sorties et réglages de course. La clé API Intervals.icu reste uniquement sur chaque appareil.
+          Une fois connecté, chaque modification est sauvegardée automatiquement : profil, programme, séances validées, sorties et réglages de course. La clé API Intervals.icu reste uniquement sur chaque appareil.
         </p>
       </Card>
     );
@@ -149,8 +217,10 @@ export default function AccountCard() {
         <Button variant="ghost" size="sm" onClick={() => syncNow(true)} disabled={c.status === 'syncing' || c.status === 'conflict'}><RefreshCw className="h-4 w-4" /> Synchroniser</Button>
       </div>
       <p className="mt-3 text-sm text-muted">Chaque modification est sauvegardée automatiquement. Sur un autre téléphone ou ordinateur, connectez-vous avec la même adresse pour retrouver votre programme.</p>
+      {changing && <NewPasswordForm className="mt-4" onDone={() => setChanging(false)} onCancel={() => setChanging(false)} />}
       <div className="mt-4 flex flex-wrap gap-2">
         <Button variant="ghost" size="sm" onClick={() => run(signOut)} disabled={busy}><LogOut className="h-4 w-4" /> Se déconnecter</Button>
+        {!changing && <Button variant="ghost" size="sm" onClick={() => setChanging(true)} disabled={busy}><KeyRound className="h-4 w-4" /> Changer le mot de passe</Button>}
         <Button
           variant="danger"
           size="sm"
@@ -214,6 +284,49 @@ export function LoginDialog({ onClose }) {
       <div className="rise relative w-full max-w-lg">
         <button type="button" onClick={onClose} className="absolute right-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-full text-muted hover:bg-sunken hover:text-ink" aria-label="Fermer">×</button>
         <AccountCard />
+      </div>
+    </Overlay>
+  );
+}
+
+/** Choix d'un nouveau mot de passe (après le lien « mot de passe oublié », ou depuis le compte). */
+function NewPasswordForm({ className, onDone, onCancel }) {
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [ok, setOk] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (password.length < 8) return;
+    setBusy(true); setError(null);
+    try { await updatePassword(password); setOk(true); setTimeout(() => onDone?.(), 1400); } catch (err) { setError(err.message); }
+    setBusy(false);
+  };
+  if (ok) return <p className={cx('text-sm font-semibold', className)} style={{ color: 'var(--type-ef)' }}>Mot de passe modifié.</p>;
+  return (
+    <form className={cx('space-y-3', className)} onSubmit={submit}>
+      <Field label="Nouveau mot de passe" hint={password.length > 0 && password.length < 8 ? '8 caractères minimum.' : null}>
+        <PasswordInput value={password} onChange={(v) => { setPassword(v); setError(null); }} autoComplete="new-password" />
+      </Field>
+      <div className="flex gap-2">
+        <Button type="submit" size="sm" disabled={busy || password.length < 8}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Enregistrer</Button>
+        {onCancel && <Button variant="ghost" size="sm" onClick={onCancel}>Annuler</Button>}
+      </div>
+      {error && <p className="text-sm font-semibold" style={{ color: 'var(--type-vma)' }}>{error}</p>}
+    </form>
+  );
+}
+
+/** Ouvert automatiquement quand on arrive par le lien « mot de passe oublié ». */
+export function RecoveryDialog() {
+  const c = useCloud();
+  if (!c.recovery) return null;
+  return (
+    <Overlay label="Nouveau mot de passe" onClose={dismissRecovery} closeOnBackdrop={false}>
+      <div className="rise w-full max-w-md rounded-t-3xl border border-line bg-surface p-5 shadow-2xl sm:rounded-3xl sm:p-6">
+        <h2 className="font-display text-2xl font-extrabold leading-tight">Choisissez un nouveau mot de passe</h2>
+        <p className="mt-1 text-sm text-muted">Pour le compte {c.user?.email}. Il servira ensuite pour vous connecter sur tous vos appareils, y compris l’app installée sur votre téléphone.</p>
+        <NewPasswordForm className="mt-4" onDone={dismissRecovery} onCancel={dismissRecovery} />
       </div>
     </Overlay>
   );

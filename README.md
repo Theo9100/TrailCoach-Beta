@@ -15,7 +15,7 @@ Application web de préparation trail : un programme d'entraînement sur mesure,
 - **Carte de partage** : image d'une semaine, d'une séance ou du bilan, à publier sur Strava ou Instagram.
 - **Tracé de la course** : import facultatif du GPX du parcours dans le questionnaire ou le profil (distance et D+ remplis automatiquement, profil et montées analysés).
 - **Profil** : modification du profil (le programme se recalcule) et zones d'entraînement personnalisées.
-- **Compte** : connexion par e-mail (lien ou code, sans mot de passe) et sauvegarde automatique en ligne, pour retrouver son programme sur tous ses appareils. Facultatif : l'app reste utilisable sans compte.
+- **Compte** : connexion par e-mail et mot de passe, et sauvegarde automatique en ligne, pour retrouver son programme sur tous ses appareils. Facultatif : l'app reste utilisable sans compte.
 - **Réglages** : guide animé pour relier la montre via Intervals.icu, thème clair/sombre/système, export et restauration des données, réinitialisation.
 
 ## Envoi des séances sur la montre
@@ -38,8 +38,8 @@ Facultative : sans configuration, l'app fonctionne comme avant, tout reste dans 
 
 1. Créer un projet sur [supabase.com](https://supabase.com) (région Europe).
 2. SQL Editor → coller le contenu de `supabase/schema.sql` → Run. Le script crée la table `user_data`, les règles « chacun ne voit que ses données » et la fonction de suppression de compte.
-3. Authentication → URL Configuration : mettre l'adresse de l'app (ex. `https://trailcoach.vercel.app`) dans « Site URL » et l'ajouter aux « Redirect URLs ».
-4. Authentication → Emails → modèle « Magic Link » : ajouter le code `{{ .Token }}` au message, pour pouvoir se connecter avec le code dans l'app installée sur iPhone (le lien s'y ouvre dans Safari, pas dans l'app).
+3. Authentication → URL Configuration : mettre l'adresse de l'app (ex. `https://trailcoach.vercel.app`) dans « Site URL » et l'ajouter aux « Redirect URLs ». Les liens de confirmation d'adresse et de mot de passe oublié y renvoient.
+4. Les modèles d'e-mails par défaut suffisent : l'e-mail ne sert qu'à confirmer l'adresse à la création du compte et à réinitialiser le mot de passe. La connexion se fait ensuite par mot de passe, y compris dans l'app installée sur iPhone.
 5. Vercel → Settings → Environment Variables : `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` (voir `.env.example`), puis redéployer.
 
 Fonctionnement : chaque modification est enregistrée sur l'appareil puis envoyée 1,5 s plus tard. À l'ouverture, au retour du réseau et quand l'app revient au premier plan, les blocs modifiés ailleurs sont récupérés ; en cas de modification des deux côtés, la plus récente l'emporte. La clé API Intervals.icu, le thème et l'onglet ouvert ne quittent jamais l'appareil.
