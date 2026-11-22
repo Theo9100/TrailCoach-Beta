@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { Cloud, CloudOff, Eye, EyeOff, KeyRound, Loader2, LogIn, LogOut, MailCheck, RefreshCw, ShieldCheck, Smartphone, Trash2, UserPlus } from 'lucide-react';
 import { Button, Card, Field, Overlay, cx, inputClass } from './ui';
-import { cloudConfigured, deleteAccount, dismissRecovery, getCloudState, resendConfirmation, resolveConflict, sendPasswordReset, signIn, signOut, signUp, subscribeCloud, syncNow, updatePassword } from '../lib/cloud';
+import { cloudConfigProblem, cloudConfigured, cloudHost, deleteAccount, dismissRecovery, getCloudState, resendConfirmation, resolveConflict, sendPasswordReset, signIn, signOut, signUp, subscribeCloud, syncNow, updatePassword } from '../lib/cloud';
 import { formatShortDate } from '../lib/format';
 
 export function useCloud() {
@@ -184,11 +184,15 @@ export default function AccountCard() {
     return (
       <Card className="p-5 sm:p-6">
         {head}
+        {cloudConfigProblem && (
+          <p className="mt-4 rounded-xl border p-3 text-sm font-semibold" style={{ borderColor: 'var(--type-vma)', color: 'var(--type-vma)' }}>{cloudConfigProblem}</p>
+        )}
         <SignInForm />
         <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-muted">
           <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Une fois connecté, chaque modification est sauvegardée automatiquement : profil, programme, séances validées, sorties et réglages de course. La clé API Intervals.icu reste uniquement sur chaque appareil.
         </p>
+        <p className="mt-2 font-mono text-[10px] text-muted/80">Serveur : {cloudHost}</p>
       </Card>
     );
   }
