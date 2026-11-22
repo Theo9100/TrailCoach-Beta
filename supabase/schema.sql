@@ -10,6 +10,12 @@ create table if not exists public.user_data (
   primary key (user_id, key)
 );
 
+-- Accès à la table pour les utilisateurs connectés (les nouveaux projets Supabase ne le donnent plus
+-- automatiquement). Ce que chacun peut voir est ensuite limité par les règles ci-dessous.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.user_data to authenticated;
+revoke all on table public.user_data from anon;
+
 -- Chacun ne peut lire et modifier que ses propres données.
 alter table public.user_data enable row level security;
 

@@ -118,6 +118,8 @@ function frenchError(e) {
   if (/same.*password|different from the old/i.test(msg)) return 'Le nouveau mot de passe doit être différent de l’ancien.';
   if (/expired|invalid.*(otp|token)|token.*(invalid|expired)/i.test(msg)) return 'Lien expiré : demandez-en un nouveau.';
   if (/invalid.*email|email.*invalid/i.test(msg)) return 'Adresse e-mail invalide.';
+  if (/permission denied for (table|schema)/i.test(msg)) return 'La base Supabase refuse l’accès à la table user_data : exécutez à nouveau le script supabase/schema.sql dans Supabase → SQL Editor (il donne les droits nécessaires).';
+  if (/relation .*user_data.* does not exist|could not find the table/i.test(msg)) return 'La table user_data n’existe pas encore : exécutez le script supabase/schema.sql dans Supabase → SQL Editor.';
   if (/invalid api key|no api key/i.test(msg)) return 'Le serveur Supabase refuse la clé VITE_SUPABASE_ANON_KEY : vérifiez qu’elle a été copiée en entier, sans espace.';
   if (isNetworkError(msg)) return 'Pas de connexion au serveur. Vos données restent enregistrées sur cet appareil.';
   if (/JWT|not authenticated|401|403/i.test(msg)) return 'Session expirée : reconnectez-vous.';
