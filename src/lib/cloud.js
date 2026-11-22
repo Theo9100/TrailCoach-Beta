@@ -6,6 +6,8 @@
  * premier plan, elle récupère les blocs modifiés depuis un autre appareil. En cas de modification
  * des deux côtés, la plus récente l'emporte, bloc par bloc.
  *
+ * Connexion par e-mail et mot de passe ; l'e-mail ne sert qu'à confirmer l'adresse et à réinitialiser le mot de passe.
+ *
  * Sans les variables VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY, rien de tout cela ne s'active.
  */
 import { SYNCED_KEYS, applyRemote, readStore, readSyncMeta, setLocalChangeHandler, writeSyncMeta } from './storage';
@@ -19,7 +21,7 @@ export const cloudConfigured = !!(URL && KEY);
 
 /* ------------------------------ état observable ------------------------------ */
 
-let state = { status: cloudConfigured ? 'loading' : 'off', user: null, lastSync: null, error: null, pending: 0, conflict: null };
+let state = { status: cloudConfigured ? 'loading' : 'off', user: null, lastSync: null, error: null, pending: 0, conflict: null, recovery: false };
 const subscribers = new Set();
 function update(patch) {
   state = { ...state, ...patch };
@@ -43,8 +45,13 @@ function client() {
 
 function frenchError(e) {
   const msg = String(e?.message || e || '');
-  if (/rate limit|too many|429|security purposes/i.test(msg)) return 'Trop de demandes en peu de temps. Patientez une minute avant de réessayer.';
-  if (/expired|invalid.*(otp|token)|token.*(invalid|expired)/i.test(msg)) return 'Code incorrect ou expiré. Demandez-en un nouveau.';
+  if (/rate limit|too many|429|security purposes/i.test(msg)) return 'Trop de demandes en peu de temps. Patientez quelques minutes avant de réessayer.';
+  if (/invalid login credentials/i.test(msg)) return 'E-mail ou mot de passe incorrect.';
+  if (/email not confirmed/i.test(msg)) return 'Adresse pas encore confirmée : ouvrez l’e-mail de confirmation reçu à la création du compte.';
+  if (/already registered|already exists/i.test(msg)) return 'Un compte existe déjà avec cette adresse : connectez-vous.';
+  if (/password.*(at least|short|characters)|weak.?password/i.test(msg)) return 'Mot de passe trop court ou trop simple : 8 caractères minimum.';
+  if (/same.*password|different from the old/i.test(msg)) return 'Le nouveau mot de passe doit être différent de l’ancien.';
+  if (/expired|invalid.*(otp|token)|token.*(invalid|expired)/i.test(msg)) return 'Lien expiré : demandez-en un nouveau.';
   if (/invalid.*email|email.*invalid/i.test(msg)) return 'Adresse e-mail invalide.';
   if (/fetch|network|load failed|failed to/i.test(msg)) return 'Pas de connexion au serveur. Vos données restent enregistrées sur cet appareil.';
   if (/JWT|not authenticated|401|403/i.test(msg)) return 'Session expirée : reconnectez-vous.';
@@ -53,19 +60,48 @@ function frenchError(e) {
 
 /* ---------------------------------- auth ---------------------------------- */
 
-/** Envoie l'e-mail de connexion (lien, et code à 6 chiffres si le modèle d'e-mail le contient). */
-export async function sendLoginEmail(email) {
+const origin = () => window.location.origin;
+
+/** Crée le compte. Supabase envoie un e-mail de confirmation : le compte est utilisable une fois l'adresse confirmée. */
+export async function signUp(email, password) {
   const sb = await client();
-  const { error } = await sb.auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: window.location.origin, shouldCreateUser: true } });
+  const { data, error } = await sb.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: origin() } });
+  if (error) throw new Error(frenchError(error));
+  // Adresse déjà utilisée : Supabase renvoie un utilisateur sans identité (pour ne pas révéler les comptes existants)
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    throw new Error('Un compte existe déjà avec cette adresse : connectez-vous, ou utilisez « Mot de passe oublié ».');
+  }
+  return { confirmed: !!data.session };
+}
+
+export async function signIn(email, password) {
+  const sb = await client();
+  const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
   if (error) throw new Error(frenchError(error));
 }
 
-/** Connexion avec le code reçu par e-mail (utile dans l'app installée sur iPhone). */
-export async function verifyLoginCode(email, code) {
+/** Renvoie l'e-mail de confirmation de l'adresse. */
+export async function resendConfirmation(email) {
   const sb = await client();
-  const { error } = await sb.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: 'email' });
+  const { error } = await sb.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: origin() } });
   if (error) throw new Error(frenchError(error));
 }
+
+/** Envoie un lien pour choisir un nouveau mot de passe. */
+export async function sendPasswordReset(email) {
+  const sb = await client();
+  const { error } = await sb.auth.resetPasswordForEmail(email.trim(), { redirectTo: origin() });
+  if (error) throw new Error(frenchError(error));
+}
+
+export async function updatePassword(password) {
+  const sb = await client();
+  const { error } = await sb.auth.updateUser({ password });
+  if (error) throw new Error(frenchError(error));
+  update({ recovery: false });
+}
+
+export function dismissRecovery() { update({ recovery: false }); }
 
 export async function signOut() {
   const sb = await client();
@@ -243,6 +279,7 @@ export async function startCloud() {
 
   // Le premier événement (INITIAL_SESSION) donne la session enregistrée, ou celle du lien reçu par e-mail
   sb.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') update({ recovery: true }); // arrivé par le lien « mot de passe oublié »
     if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
     setTimeout(() => onSession(session), 0); // hors du rappel, comme le recommande Supabase
   });

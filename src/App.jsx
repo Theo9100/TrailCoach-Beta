@@ -14,7 +14,7 @@ import { toISODate } from './lib/format';
 import { computeLoadMods, fatigueSignal } from './lib/adapt';
 import { archiveEntry } from './lib/recap';
 import { cloudConfigured, startCloud } from './lib/cloud';
-import { CloudBadge, ConflictDialog, LoginDialog } from './components/AccountCard';
+import { CloudBadge, ConflictDialog, LoginDialog, RecoveryDialog } from './components/AccountCard';
 import { addDays, mondayOf } from './lib/format';
 import GlassTabBar from './components/GlassTabBar';
 import { defaultProfile, migrateLegacyProfile, usePersistentState } from './lib/storage';
@@ -258,6 +258,7 @@ export default function App() {
       />
       {loginOpen && <LoginDialog onClose={() => setLoginOpen(false)} />}
       <ConflictDialog />
+      <RecoveryDialog />
       </>
     );
   }
@@ -359,6 +360,7 @@ export default function App() {
 
       <GlassTabBar tabs={TABS} active={tab} onChange={setTab} />
       <ConflictDialog />
+      <RecoveryDialog />
     </div>
   );
 }
