@@ -156,10 +156,97 @@ export const EXERCISES = {
     a: pose({ head: [97, 59], neck: [88, 64], hip: [60, 70], knee: [42, 80], foot: [24, 90], knee2: [42, 80], foot2: [24, 90], elbow: [90, 78], hand: [91, 91] }),
     b: pose({ head: [97, 59], neck: [88, 64], hip: [60, 69], knee: [42, 80], foot: [24, 90], knee2: [76, 79], foot2: [62, 87], elbow: [90, 78], hand: [91, 91] }),
   },
+
+  /* ---- Exercices des séances bonus ---- */
+  squatlent: {
+    name: 'Squat excentrique',
+    tempo: [4000, 300, 900, 400],
+    cue: 'Descendre en 4 secondes en freinant, cuisses parallèles au sol, puis remonter normalement. C’est la descente qui travaille.',
+    a: pose({ elbow: [68, 40], hand: [76, 38] }),
+    b: pose({ head: [62, 36], neck: [59, 46], hip: [49, 68], knee: [68, 72], elbow: [69, 50], hand: [80, 48] }),
+  },
+  nordic: {
+    name: 'Nordic (ischios)',
+    frames: [['b', 3000, 'inOut'], ['c', 350, 'out'], ['c', 250], ['a', 1000, 'inOut'], ['a', 500]],
+    feet: 'point',
+    floor: true,
+    cue: 'À genoux, pieds bloqués (sous un canapé ou tenus par quelqu’un). Corps droit, se laisser basculer en avant le plus lentement possible, se rattraper sur les mains, puis revenir.',
+    a: pose({ head: [58, 35], neck: [58, 46], hip: [58, 72], knee: [58, 90], foot: [40, 90], elbow: [64, 57], hand: [61, 50] }),
+    b: pose({ head: [100, 55], neck: [92, 62], hip: [72, 78], knee: [58, 90], foot: [40, 90], elbow: [95, 70], hand: [100, 77] }),
+    c: pose({ head: [109, 76], neck: [100, 79], hip: [75, 85], knee: [58, 90], foot: [40, 90], elbow: [95, 84], hand: [98, 91] }),
+  },
+  pompes: {
+    name: 'Pompes',
+    tempo: [1000, 150, 800, 300],
+    feet: 'point',
+    floor: true,
+    cue: 'Mains sous les épaules, corps gainé de la tête aux talons. Descendre la poitrine près du sol, coudes vers l’arrière, puis pousser.',
+    a: pose({ head: [91, 63], neck: [80, 68], hip: [56, 77], knee: [39, 84], foot: [22, 90], elbow: [80, 80], hand: [82, 91] }),
+    b: pose({ head: [94, 81], neck: [83, 84], hip: [58, 87], knee: [40, 89], foot: [22, 90], elbow: [75, 77], hand: [82, 91] }),
+  },
+  pompesinc: {
+    name: 'Pompes inclinées',
+    tempo: [1000, 150, 800, 300],
+    prop: 'box',
+    cue: 'Mains sur un banc ou une table, corps bien droit. Descendre la poitrine vers le bord, puis pousser. Plus l’appui est haut, plus c’est facile.',
+    a: pose({ head: [83, 51], neck: [74, 58], hip: [51, 72], knee: [36, 82], foot: [20, 92], elbow: [74, 70], hand: [77, 80] }),
+    b: pose({ head: [88, 61], neck: [78, 66], hip: [54, 77], knee: [37, 85], foot: [20, 92], elbow: [69, 71], hand: [77, 80] }),
+  },
+  dips: {
+    name: 'Dips sur chaise',
+    tempo: [1100, 150, 900, 300],
+    prop: 'boxBack',
+    feet: 'flat',
+    cue: 'Mains sur le bord d’une chaise derrière vous, jambes devant. Descendre en pliant les coudes vers l’arrière jusqu’à 90°, puis pousser.',
+    a: pose({ head: [57, 41], neck: [56, 52], hip: [60, 77], knee: [78, 76], foot: [88, 92], elbow: [52, 64], hand: [50, 77] }),
+    b: pose({ head: [58, 53], neck: [57, 64], hip: [61, 89], knee: [79, 85], foot: [88, 92], elbow: [44, 69], hand: [50, 77] }),
+  },
+  boxjump: {
+    name: 'Sauts sur banc',
+    frames: [['a', 380, 'out'], ['a', 150], ['t', 230, 'in'], ['b', 230, 'out'], ['c', 380, 'inOut'], ['c', 300], ['d', 650, 'inOut'], ['a', 420, 'inOut']],
+    feet: 'flat',
+    prop: 'box',
+    cue: 'Fléchir, lancer les bras et sauter sur un banc stable. Atterrir pieds à plat, genoux souples. Redescendre en marchant, jamais en sautant.',
+    a: pose({ head: [47, 36], neck: [44, 46], hip: [34, 68], knee: [53, 72], foot: [43, 92], elbow: [37, 57], hand: [29, 63] }),
+    t: pose({ head: [65, 6], neck: [63, 17], hip: [58, 42], knee: [63, 58], foot: [60, 74], elbow: [70, 16], hand: [76, 8] }),
+    b: pose({ head: [79, 26], neck: [76, 36], hip: [66, 58], knee: [84, 62], foot: [74, 80], elbow: [83, 44], hand: [90, 42] }),
+    c: pose({ head: [74, 7], neck: [74, 18], hip: [74, 44], knee: [74, 62], foot: [72, 80], elbow: [77, 31], hand: [79, 43] }),
+    d: pose({ head: [44, 19], neck: [44, 30], hip: [44, 56], knee: [44, 74], foot: [42, 92], elbow: [47, 43], hand: [49, 55] }),
+  },
+  pogo: {
+    name: 'Rebonds chevilles',
+    frames: [['b', 170, 'out'], ['a', 170, 'in']],
+    cue: 'Petits rebonds sur l’avant du pied, jambes presque tendues, comme à la corde à sauter. Le talon ne touche pas le sol, contacts courts.',
+    a: pose({ elbow: [62, 42], hand: [69, 47] }),
+    b: pose({ head: [60, 14], neck: [60, 25], hip: [60, 51], knee: [60, 69], foot: [58, 87], elbow: [62, 37], hand: [69, 42] }),
+  },
+  skipping: {
+    name: 'Montées de genoux',
+    frames: [['a', 270, 'inOut'], ['b', 270, 'inOut']],
+    cue: 'Sur place, monter les genoux à hauteur de hanche en restant sur l’avant du pied. Buste droit, bras qui accompagnent.',
+    a: pose({ head: [61, 18], neck: [61, 29], hip: [60, 55], knee: [77, 57], foot: [74, 74], knee2: [60, 73], foot2: [58, 90], elbow: [55, 41], hand: [57, 51] }),
+    b: pose({ head: [61, 18], neck: [61, 29], hip: [60, 55], knee: [60, 73], foot: [58, 90], knee2: [77, 57], foot2: [74, 74], elbow: [69, 40], hand: [72, 30] }),
+  },
+  equilibre: {
+    name: 'Équilibre sur une jambe',
+    tempo: [1700, 0, 1700, 0],
+    cue: 'Sur un pied, genou légèrement fléchi, l’autre genou levé. Tenir sans poser le pied. Plus dur : yeux fermés ou sur un coussin.',
+    a: pose({ knee2: [72, 62], foot2: [64, 77], elbow: [69, 38], hand: [80, 39] }),
+    b: pose({ head: [62, 19], neck: [61, 30], hip: [59, 56], knee2: [71, 63], foot2: [63, 78], elbow: [69, 40], hand: [79, 43] }),
+  },
+  deadbug: {
+    name: 'Dead bug',
+    tempo: [1100, 200, 900, 300],
+    feet: 'point',
+    floor: true,
+    cue: 'Sur le dos, bas du dos plaqué au sol, genoux à 90°. Allonger une jambe et le bras opposé sans cambrer, revenir, changer de côté.',
+    a: pose({ head: [22, 86], neck: [31, 87], hip: [58, 88], knee: [60, 70], foot: [78, 70], knee2: [60, 70], foot2: [78, 70], elbow: [33, 75], hand: [34, 62] }),
+    b: pose({ head: [22, 86], neck: [31, 87], hip: [58, 88], knee: [75, 84], foot: [93, 86], knee2: [60, 70], foot2: [78, 70], elbow: [22, 79], hand: [10, 83] }),
+  },
 };
 
 /** Une ligne de routine : nombre de séries, répétitions (ou secondes si timed), éventuellement par jambe / côté. */
-function set(id, sets, amount, { timed = false, side = null, note = null } = {}) {
+export function set(id, sets, amount, { timed = false, side = null, note = null } = {}) {
   const dose = `${sets} × ${amount}${timed ? ' s' : ''}${side ? ` par ${side}` : ''}${note ? `, ${note}` : ''}`;
   return { id, sets, amount, timed, side, note, dose };
 }

@@ -9,6 +9,7 @@ Application web de préparation trail : un programme d'entraînement sur mesure,
 - **Plan personnalisé** : le questionnaire demande le volume couru actuellement, le nombre de sorties, l'âge et une éventuelle blessure récente. Le plan part de ce volume, monte d'environ 10 % par semaine au maximum (moins après 50 ans ou après une blessure), ajoute les séances progressivement et affiche des mises en garde adaptées.
 - **Adaptation** : recalage automatique après une semaine peu suivie, séances déplaçables, courses de préparation, week-ends choc (ultras), ressenti après séance.
 - **Renforcement** : une séance hebdomadaire avec exercices animés, sur 3 paliers de difficulté qui montent au fil du programme (bases, travail sur une jambe, sauts et descentes freinées). Une séance guidée en plein écran enchaîne les exercices, les récupérations et les chronos.
+- **Séances bonus** : bibliothèque de 12 séances de renforcement facultatives (excentrique, pliométrie, haut du corps, gainage, chevilles, force en côte, mobilité), à piocher les jours où l'on a du temps. Chacune est recommandée, possible ou déconseillée selon la phase, la semaine d'assimilation, la forme signalée, le profil de la course et les séances clés du jour et du lendemain.
 - **Jour J** : temps de passage par section, plan de nutrition, liste de matériel, tracé du parcours. L'estimation s'affine d'après les vraies sorties longues en dénivelé.
 - **Suivi** : score de suivi, courbe de charge réalisé / prévu, estimation de VMA et test de VMA guidé (6 minutes, avec chrono).
 - **Bilan** : après la course, récapitulatif de la préparation (volume, dénivelé, régularité, temps réalisé face au temps estimé), puis enchaînement vers un nouvel objectif.
@@ -63,6 +64,7 @@ src/
   lib/intervals.js   envoi des séances et récupération des sorties (Intervals.icu)
   lib/score.js       score de suivi du plan
   lib/exercises.js   exercices de renforcement, paliers de difficulté, déroulé de la séance guidée
+  lib/bonus.js       bibliothèque de séances bonus et recommandations
   lib/pose.js        animation des exercices (enchaînement des postures, membres de longueur constante)
   lib/raceplan.js    plan de course, nutrition, estimation affinée par les sorties
   lib/recap.js       bilan de fin de préparation

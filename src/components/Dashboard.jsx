@@ -10,6 +10,7 @@ import ExerciseFigure from './ExerciseFigure';
 import RaceDay from './RaceDay';
 import VmaTest from './VmaTest';
 import StrengthPlayer from './StrengthPlayer';
+import BonusLibrary, { BonusStrip } from './BonusLibrary';
 import Recap, { PastPreparations } from './Recap';
 import ShareModal from './ShareModal';
 import { recapCard, sessionCard, weekCard } from '../lib/sharecard';
@@ -18,14 +19,14 @@ import { estimateVma } from '../lib/adapt';
 import { addDays } from '../lib/format';
 import { DAYS_SHORT, daysBetween, formatDuration, formatKm, formatLongDate, formatShortDate, toDate, toISODate } from '../lib/format';
 
-export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch, activities = [], moves = {}, onMove, onFeedback, raceSettings, setRaceSettings, gear, setGear, onApplyVma, fatigue, onDismissRecal, vmaTests = [], onVmaTest, raceResult, setRaceResult, history = [], onNewGoal }) {
+export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayWeek, completions, toggleCompletion, adjustments, setAdjustment, activitiesById, intervals, syncInfo, onSendWeek, onConnectWatch, activities = [], moves = {}, onMove, onFeedback, raceSettings, setRaceSettings, gear, setGear, onApplyVma, fatigue, onDismissRecal, vmaTests = [], onVmaTest, raceResult, setRaceResult, history = [], onNewGoal, bonusLog = [], onBonusDone, onBonusRemove }) {
   const week = plan[viewWeek - 1];
   const daysLeft = daysBetween(new Date(), profile.raceDate);
   const courseSession = plan[plan.length - 1]?.sessions.find((x) => x.type === 'COURSE');
   const raceDone = daysLeft < 0 || !!completions[courseSession?.id]?.done;
   const [view, setView] = useState(raceDone ? 'recap' : 'plan');
   const [share, setShare] = useState(null);
-  const shownView = view === 'recap' && !raceDone ? 'plan' : view;
+  const shownView = (view === 'recap' && !raceDone) || (view === 'bonus' && raceDone) ? 'plan' : view;
   const today = toISODate(new Date());
 
   const done = week.sessions.filter((s) => completions[s.id]?.done);
@@ -131,7 +132,7 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
         className="mx-auto max-w-md"
         options={raceDone
           ? [{ value: 'recap', label: 'Bilan' }, { value: 'plan', label: 'Plan' }, { value: 'race', label: 'Jour J' }, { value: 'stats', label: 'Suivi' }]
-          : [{ value: 'plan', label: 'Entraînement' }, { value: 'race', label: 'Jour J' }, { value: 'stats', label: 'Suivi' }]}
+          : [{ value: 'plan', label: 'Entraînement' }, { value: 'bonus', label: 'Bonus' }, { value: 'race', label: 'Jour J' }, { value: 'stats', label: 'Suivi' }]}
         value={shownView}
         onChange={setView}
       />
@@ -148,10 +149,25 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
           history={history}
           onNewGoal={onNewGoal}
           onShare={(recap, finish) => setShare(recapCard(recap, finish))}
+          bonusLog={bonusLog}
         />
       )}
 
       {share && <ShareModal data={share} onClose={() => setShare(null)} />}
+
+      {shownView === 'bonus' && (
+        <BonusLibrary
+          profile={profile}
+          plan={plan}
+          week={week}
+          todayWeek={todayWeek}
+          setViewWeek={setViewWeek}
+          adjustment={adjustments[week.number] || 'normal'}
+          bonusLog={bonusLog}
+          onDone={onBonusDone}
+          onRemove={onBonusRemove}
+        />
+      )}
 
       {shownView === 'race' && <RaceDay profile={profile} settings={raceSettings} setSettings={setRaceSettings} gear={gear} setGear={setGear} activities={activities} />}
 
@@ -249,6 +265,7 @@ export default function Dashboard({ profile, plan, viewWeek, setViewWeek, todayW
                 onShare={() => setShare(sessionCard(s, { profile, activity: activitiesById[completions[s.id]?.activityId], completion: completions[s.id] }))}
               />
             ))}
+            <BonusStrip profile={profile} plan={plan} week={week} adjustment={adjustments[week.number] || 'normal'} bonusLog={bonusLog} onOpen={() => { setView('bonus'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
           </div>
 
           <aside className="space-y-4">
