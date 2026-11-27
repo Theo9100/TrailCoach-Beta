@@ -36,7 +36,7 @@ function Ring({ left, total, size = 220, color = 'rgb(var(--accent-rgb))', child
 export default function StrengthPlayer({ session, startAt = 0, alreadyDone = false, onComplete, onClose }) {
   const items = session.exercises;
   const light = !!session.light;
-  const steps = useMemo(() => buildStrengthSteps(items, { light }), [items, light]);
+  const steps = useMemo(() => buildStrengthSteps(items, { light, ...(session.rest || {}) }), [items, light, session.rest]);
   const totalMinutes = useMemo(() => estimateStepsMinutes(steps), [steps]);
   const material = useMemo(() => materialFor(items), [items]);
 
@@ -162,7 +162,7 @@ export default function StrengthPlayer({ session, startAt = 0, alreadyDone = fal
       <div className="mx-auto w-full max-w-3xl flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
         <div className="rise">
           <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.14em]" style={{ color: 'var(--type-renfo)', background: 'color-mix(in srgb, var(--type-renfo) 14%, transparent)' }}>
-            <Dumbbell className="h-3.5 w-3.5" /> Séance guidée
+            <Dumbbell className="h-3.5 w-3.5" /> {session.kicker || 'Séance guidée'}
           </div>
           <h1 className="font-display mt-3 text-4xl font-black leading-[0.95] sm:text-5xl">{session.title}</h1>
           <p className="mt-2 text-sm font-semibold text-muted">
@@ -171,6 +171,7 @@ export default function StrengthPlayer({ session, startAt = 0, alreadyDone = fal
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">
             Les exercices s’enchaînent tout seuls : touchez « Série terminée » après vos répétitions, les récupérations et les exercices chronométrés défilent automatiquement, avec un bip avant chaque reprise.
           </p>
+          {session.note && <p className="mt-3 max-w-xl rounded-xl bg-sunken/70 px-3.5 py-2.5 text-sm font-semibold leading-relaxed">{session.note}</p>}
           {material.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold">
               <span className="py-1 text-muted">À prévoir :</span>
@@ -260,7 +261,7 @@ export default function StrengthPlayer({ session, startAt = 0, alreadyDone = fal
               <div className="font-display text-7xl font-black leading-none tabular text-accent">{step.reps}</div>
             )}
             <div className="text-left">
-              <div className="text-lg font-extrabold leading-tight">{timed ? (prep ? 'Mettez-vous en place' : paused ? 'En pause' : 'Tenez la position') : 'répétitions'}</div>
+              <div className="text-lg font-extrabold leading-tight">{timed ? (prep ? 'Mettez-vous en place' : paused ? 'En pause' : ex.frames ? 'En continu' : 'Tenez la position') : 'répétitions'}</div>
               <div className="text-sm font-bold text-muted">{timed ? (prep ? (steps[index + 1]?.sideLabel || `${steps[index + 1]?.seconds} secondes`) : (step.sideLabel || `${step.seconds} secondes`)) : (step.side ? `par ${step.side}` : 'à votre rythme')}{step.note ? ` · ${step.note}` : ''}</div>
             </div>
           </div>

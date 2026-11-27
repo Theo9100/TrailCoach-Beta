@@ -66,6 +66,7 @@ export default function App() {
   const [vmaTests, setVmaTests] = usePersistentState('vmaTests', []); // [{ at, distance, vma }], du plus récent au plus ancien
   const [raceResult, setRaceResult] = usePersistentState('raceResult', null); // { minutes }
   const [history, setHistory] = usePersistentState('history', []); // préparations terminées
+  const [bonusLog, setBonusLog] = usePersistentState('bonusLog', []); // séances bonus faites : [{ id, bonusId, date, minutes, at }]
   const [newGoal, setNewGoal] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false); // connexion depuis le questionnaire (nouvel appareil) // { initial, archive } pendant le questionnaire « nouvel objectif »
 
@@ -327,6 +328,9 @@ export default function App() {
             setRaceResult={setRaceResult}
             history={history}
             onNewGoal={startNewGoal}
+            bonusLog={bonusLog}
+            onBonusDone={(bonusId, minutes) => setBonusLog((prev) => [{ id: `b${Date.now()}`, bonusId, minutes, date: toISODate(new Date()), at: Date.now() }, ...prev].slice(0, 300))}
+            onBonusRemove={(id) => setBonusLog((prev) => prev.filter((e) => e.id !== id))}
           />
         )}
         {tab === 'sessions' && (

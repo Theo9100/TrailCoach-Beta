@@ -5,7 +5,7 @@
 import { addDays, toISODate } from './format';
 import { planAdherence } from './score';
 
-export function buildRecap(plan, completions, activities, profile) {
+export function buildRecap(plan, completions, activities, profile, bonusLog = []) {
   if (!plan.length) return null;
   const from = plan[0].startDate;
   const raceDate = toISODate(profile.raceDate);
@@ -61,6 +61,7 @@ export function buildRecap(plan, completions, activities, profile) {
     score: adherence?.score ?? null,
     raceActivityMinutes: raceActivity ? raceActivity.elapsedMin || raceActivity.movingMin || null : null,
     courseDone: !!(course && completions[course.id]?.done),
+    bonus: (bonusLog || []).filter((e) => e.date >= from && e.date <= raceDate).length,
   };
 }
 

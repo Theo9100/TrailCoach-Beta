@@ -47,6 +47,14 @@ export function timelineOf(ex) {
     frames = [['b', go, 'inOut'], ['b', holdB], ['a', back, 'inOut'], ['a', holdA]];
   }
   frames = frames.filter((f) => f[1] > 0);
+  // Côté de flexion de référence de chaque membre : celui de la posture où il est le plus plié.
+  // Sert quand le membre est presque tendu aux deux bouts d'un segment (sinon le coude pourrait « basculer »).
+  const global = {};
+  Object.entries(CHAINS).forEach(([name, joints]) => {
+    const bends = posesOf(ex).map((p) => chainOf(p, joints).bend);
+    const top = bends.reduce((m, b) => (Math.abs(b) > Math.abs(m) ? b : m), 0);
+    global[name] = top >= 0 ? 1 : -1;
+  });
   const segs = frames.map((f, i) => {
     const prev = frames[(i - 1 + frames.length) % frames.length];
     const from = full(ex[prev[0]]);
@@ -55,7 +63,8 @@ export function timelineOf(ex) {
     Object.entries(CHAINS).forEach(([name, joints]) => {
       const a = chainOf(from, joints);
       const b = chainOf(to, joints);
-      chains[name] = { a, b, side: (Math.abs(a.bend) >= Math.abs(b.bend) ? a.bend : b.bend) >= 0 ? 1 : -1 };
+      const strongest = Math.abs(a.bend) >= Math.abs(b.bend) ? a.bend : b.bend;
+      chains[name] = { a, b, side: Math.abs(strongest) < 4 ? global[name] : strongest >= 0 ? 1 : -1 };
     });
     return { from, to, ms: f[1], ease: EASE[f[2]] || EASE.inOut, chains };
   });

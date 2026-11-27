@@ -25,8 +25,8 @@ function CountUp({ value, format = (v) => Math.round(v).toLocaleString('fr-FR') 
   return <>{format(shown)}</>;
 }
 
-export default function Recap({ profile, plan, completions, activities, raceSettings, raceResult, setRaceResult, history = [], onNewGoal, onShare }) {
-  const recap = useMemo(() => buildRecap(plan, completions, activities, profile), [plan, completions, activities, profile]);
+export default function Recap({ profile, plan, completions, activities, raceSettings, raceResult, setRaceResult, history = [], onNewGoal, onShare, bonusLog = [] }) {
+  const recap = useMemo(() => buildRecap(plan, completions, activities, profile, bonusLog), [plan, completions, activities, profile, bonusLog]);
   const predicted = useMemo(() => {
     const cal = raceSettings?.useRuns === false ? null : trailCalibration(activities, profile, new Date(`${profile.raceDate}T12:00:00`));
     return buildRacePlan(profile, { factor: raceSettings?.factor || 1, speed: cal?.speed }).totalMinutes;
@@ -50,7 +50,7 @@ export default function Recap({ profile, plan, completions, activities, raceSett
     recap.longest && { icon: Route, label: 'Plus longue sortie', value: `${formatKm(recap.longest.km)} km`, hint: `${recap.longest.dplus} m D+ · ${formatShortDate(recap.longest.date)}` },
     recap.biggest && { icon: TrendingUp, label: 'Plus grosse semaine', value: `${Math.round(recap.biggest.km)} km`, hint: `Semaine ${recap.biggest.number} · ${Math.round(recap.biggest.dplus)} m D+` },
     { icon: Award, label: 'Suivi du plan', value: recap.score != null ? `${recap.score} / 100` : '–', hint: scoreLabel(recap.score), color: scoreColor(recap.score) },
-    { icon: Dumbbell, label: 'Renforcement', value: `${recap.strength} séance${recap.strength > 1 ? 's' : ''}`, hint: recap.strength ? 'Un atout pour les descentes' : 'À intégrer la prochaine fois' },
+    { icon: Dumbbell, label: 'Renforcement', value: `${recap.strength + recap.bonus} séance${recap.strength + recap.bonus > 1 ? 's' : ''}`, hint: recap.bonus ? `dont ${recap.bonus} séance${recap.bonus > 1 ? 's' : ''} bonus` : recap.strength ? 'Un atout pour les descentes' : 'À intégrer la prochaine fois' },
   ].filter(Boolean);
 
   return (

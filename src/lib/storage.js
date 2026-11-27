@@ -31,7 +31,7 @@ export function writeStore(key, value) {
  */
 export const SYNCED_KEYS = [
   'profile', 'completions', 'adjustments', 'activities', 'moves', 'recalOff', 'raceSettings', 'gear',
-  'vmaTests', 'raceResult', 'history', 'intervalsSync', 'icuIgnored', 'watchBrand',
+  'vmaTests', 'raceResult', 'history', 'intervalsSync', 'icuIgnored', 'watchBrand', 'bonusLog',
 ];
 const SYNCED = new Set(SYNCED_KEYS);
 const SYNC_META = 'trailcoach.sync';
